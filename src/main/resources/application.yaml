@@ -1,0 +1,22 @@
+server:
+  port: 1325
+
+spring:
+  application:
+    name: CinemaBooking
+
+  jpa:
+    hibernate:
+      ddl-auto: update  # Options: none, validate, update, create, create-drop
+    show-sql: true      # Show SQL statements in logs
+    properties:
+      hibernate:
+        format_sql: true  # Format SQL for readability
+        dialect: org.hibernate.dialect.MySQLDialect
+
+app:
+    appDomain: ${APP_DOMAIN:localhost}
+    database:
+      url: ${DB_HOST:localhost}
+      username: ${DB_USERNAME}
+      password: ${DB_PASSWORD}
