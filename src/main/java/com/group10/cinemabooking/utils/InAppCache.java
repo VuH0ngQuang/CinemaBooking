@@ -1,8 +1,11 @@
 package com.group10.cinemabooking.utils;
 
+import org.springframework.stereotype.Component;
+
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+@Component
 public class InAppCache<K, V> {
 
     private final ConcurrentHashMap<K, V> store = new ConcurrentHashMap<>();
