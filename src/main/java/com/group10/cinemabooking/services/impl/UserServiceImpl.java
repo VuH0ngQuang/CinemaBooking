@@ -9,10 +9,16 @@ import com.group10.cinemabooking.utils.LockManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
@@ -105,7 +111,27 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-     private void saveUser(Users user) {
+    @Override
+    public Users getUserByEmail(String email) {
+        try {
+            return userRepository.findByEmail(email).orElse(null);
+        } catch (Exception e) {
+            log.error("Error fetching user by email {}: {}", email, e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        Users user = getUserByEmail(email);
+        return new User(
+                user.getEmail(),
+                user.getPassword(),
+                List.of(() -> "ROLE_" + user.getRole().name())
+        );
+    }
+
+    private void saveUser(Users user) {
         try {
             userRepository.save(user);
             userCache.put(user.getUser_id(),user);

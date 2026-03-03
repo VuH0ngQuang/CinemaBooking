@@ -1,6 +1,8 @@
 package com.group10.cinemabooking.configurations;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +14,7 @@ import java.util.Map;
 
 @Configuration
 public class DotEnvPostProcessor implements EnvironmentPostProcessor {
+    public static final Logger log = LoggerFactory.getLogger(DotEnvPostProcessor.class);
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
@@ -33,7 +36,7 @@ public class DotEnvPostProcessor implements EnvironmentPostProcessor {
                 environment.getPropertySources().addFirst(dotEnvSource);
             }
         } catch (Exception e) {
-            System.err.println("Warning: Could not load .env file: " + e.getMessage());
+            log.error("Warning: Could not load .env file: {}", e.getMessage());
         }
     }
 }
