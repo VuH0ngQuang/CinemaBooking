@@ -2,6 +2,8 @@ package com.group10.cinemabooking.configurations;
 
 import com.group10.cinemabooking.filter.JwtAuthFilter;
 import com.group10.cinemabooking.services.UserService;
+import com.group10.cinemabooking.utils.InAppCache;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

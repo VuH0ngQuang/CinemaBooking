@@ -27,8 +27,6 @@ public class AuthSessions {
     @NonNull
     @Column(nullable = false)
     private String session_token;
-    @NonNull
-    @Column(nullable = false)
     private Date revoked_at;
 
     @ManyToOne(optional = false)

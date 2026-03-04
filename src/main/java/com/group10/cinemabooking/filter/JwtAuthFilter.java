@@ -2,6 +2,7 @@ package com.group10.cinemabooking.filter;
 
 import com.group10.cinemabooking.services.JwtService;
 import com.group10.cinemabooking.services.UserService;
+import com.group10.cinemabooking.utils.InAppCache;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,11 +24,16 @@ import java.util.List;
 public class JwtAuthFilter  extends OncePerRequestFilter {
     private final UserService userService;
     private final JwtService jwtService;
+    private final InAppCache<String, String> tokenCache;
 
     @Autowired
-    public JwtAuthFilter(UserService userService, JwtService jwtService) {
+    public JwtAuthFilter(UserService userService,
+                         JwtService jwtService,
+                         InAppCache<String, String> tokenCache
+    ) {
         this.userService = userService;
         this.jwtService = jwtService;
+        this.tokenCache = tokenCache;
     }
 
     @Override
@@ -38,6 +44,12 @@ public class JwtAuthFilter  extends OncePerRequestFilter {
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+            //Check if token is in whitelist
+            if (!tokenCache.contains(token)) {
+                // Token not known/active → skip auth
+                filterChain.doFilter(request, response);
+                return;
+            }
             String email = jwtService.extractEmail(token);
 
             if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {

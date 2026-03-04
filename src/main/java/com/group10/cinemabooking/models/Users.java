@@ -27,9 +27,11 @@ public class Users {
     private Date updated_at;
     @Builder.Default
     @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
     private UserStatusEnum status = UserStatusEnum.ACTIVE;
     @Builder.Default
     @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
     private UserRoleEnum role = UserRoleEnum.CUSTOMER;
     @NonNull
     @Column(nullable = false)
