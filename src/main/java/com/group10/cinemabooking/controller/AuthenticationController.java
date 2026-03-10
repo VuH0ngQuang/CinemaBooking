@@ -39,6 +39,7 @@ public class AuthenticationController {
 
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody UserDto userDto) {
+        try{
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         userDto.getEmail(),
@@ -50,7 +51,10 @@ public class AuthenticationController {
             tokenCache.put(token, userDto.getEmail()); // whitelist
             return ResponseEntity.ok(token);
         }
-        return ResponseEntity.status(401).body("Invalid email or password");
+        return ResponseEntity.status(401).body("Invalid email or password");}
+        catch (Exception e) {
+            return ResponseEntity.status(401).body("Invalid email or password");
+        }
     }
 
     @PostMapping("/register")

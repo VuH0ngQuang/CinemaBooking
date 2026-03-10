@@ -14,12 +14,17 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import com.group10.cinemabooking.enums.UserStatusEnum;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -59,7 +64,19 @@ public class UserServiceImpl implements UserService {
         }
         return userDto;
     }
-
+    @Override
+    public List<UserDto> getAllUsers() {
+        List<Users> users = userRepository.findAll();
+        
+        for (Users user : users) {
+            userCache.put(user.getUser_id(), user);
+        }
+        
+        return users.stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+  
     @Override
     public UserDto getUserById(Long id) {
         Users user = userCache.getOrLoad(id, key ->
@@ -127,7 +144,7 @@ public class UserServiceImpl implements UserService {
         return new User(
                 user.getEmail(),
                 user.getPassword(),
-                List.of(() -> "ROLE_" + user.getRole().name())
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
         );
     }
 
@@ -151,5 +168,61 @@ public class UserServiceImpl implements UserService {
         dto.setStatus(user.getStatus());
         dto.setRole(user.getRole());
         return dto;
+    }
+    @Override
+    public Page<UserDto> getAllUsersPaginated(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Users> usersPage = userRepository.findAll(pageable);
+        
+        usersPage.getContent().forEach(user -> userCache.put(user.getUser_id(), user));
+        
+        return usersPage.map(this::toDto);
+    }
+
+    
+    @Override
+    public void softDeleteUser(Long id) {
+        Users user = userCache.getOrLoad(id, key -> userRepository.findById(key).orElse(null));
+        
+        if (user != null) {
+            ReentrantLock lock = lockManager.getLock(id);
+            lock.lock();
+            try {
+                user.setStatus(UserStatusEnum.INACTIVE);
+                user.setUpdated_at(new Date());
+                
+                saveUser(user); 
+            } catch (Exception e) {
+                log.error("Error soft deleting user with id {}: {}", id, e.getMessage());
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+
+  
+    @Override
+    public boolean changePassword(Long id, String oldPassword, String newPassword) {
+        Users user = userCache.getOrLoad(id, key -> userRepository.findById(key).orElse(null));
+        
+        if (user != null) {
+            if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+                return false; 
+            }
+            
+            ReentrantLock lock = lockManager.getLock(id);
+            lock.lock();
+            try {
+                user.setPassword(passwordEncoder.encode(newPassword));
+                user.setUpdated_at(new Date());
+                saveUser(user);
+                return true; 
+            } catch (Exception e) {
+                log.error("Error changing password for user {}: {}", id, e.getMessage());
+            } finally {
+                lock.unlock();
+            }
+        }
+        return false;
     }
 }
