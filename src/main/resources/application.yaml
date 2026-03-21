@@ -24,3 +24,8 @@ app:
     jwt:
       secret: ${JWT_SECRET:defaultSecretKey}
       expirationMs: ${JWT_EXPIRATION_MS:3600000} # 1 hour in milliseconds
+
+    payos:
+      clientId: ${PAYOS_CLIENT_ID}
+      apiKey: ${PAYOS_API_KEY}
+      checksumKey: ${PAYOS_CHECKSUM_KEY}

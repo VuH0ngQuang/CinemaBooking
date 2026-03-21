@@ -17,4 +17,6 @@ public class CacheConf {
     public InAppCache<String, String> tokenCache() {
         return new InAppCache<>();
     }
+
+    @Bean InAppCache<String, Long> emailCache() {return new InAppCache<>();}
 }

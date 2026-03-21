@@ -14,6 +14,7 @@ public class AppConf {
     private static final Logger log = LoggerFactory.getLogger(AppConf.class);
     private Database database;
     private Jwt jwt;
+    private PaySecret paySecret;
 
     @PostConstruct
     public void init() {
@@ -35,5 +36,12 @@ public class AppConf {
     public static class Jwt {
         private String secret;
         private long expirationMs;
+    }
+
+    @Data
+    public static class PaySecret {
+        private String clientId;
+        private String apiKey;
+        private String checksumKey;
     }
 }

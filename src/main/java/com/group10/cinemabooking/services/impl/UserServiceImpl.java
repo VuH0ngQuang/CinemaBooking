@@ -28,17 +28,20 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final LockManager<Long> lockManager;
     private final InAppCache<Long, Users> userCache;
+    private final InAppCache<String, Long> emailCache;
     private final UserRepository userRepository;
 
     @Autowired
     public UserServiceImpl(LockManager<Long> lockManager,
                            InAppCache<Long, Users> userCache,
+                           InAppCache<String, Long> emailCache,
                            UserRepository userRepository,
                            PasswordEncoder passwordEncoder
                            ) {
         this.passwordEncoder = passwordEncoder;
         this.lockManager = lockManager;
         this.userCache = userCache;
+        this.emailCache = emailCache;
         this.userRepository = userRepository;
     }
 
@@ -61,12 +64,12 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserDto getUserById(Long id) {
+    public Users getUserById(Long id) {
         Users user = userCache.getOrLoad(id, key ->
                 userRepository.findById(key).orElse(null)
         );
         if (user != null) {
-            return toDto(user);
+            return user;
         }
         return null;
     }
@@ -114,7 +117,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public Users getUserByEmail(String email) {
         try {
-            return userRepository.findByEmail(email).orElse(null);
+            return getUserById(getIdByEmail(email));
         } catch (Exception e) {
             log.error("Error fetching user by email {}: {}", email, e.getMessage());
             return null;
@@ -135,9 +138,19 @@ public class UserServiceImpl implements UserService {
         try {
             userRepository.save(user);
             userCache.put(user.getUser_id(),user);
+            emailCache.put(user.getEmail(), user.getUser_id());
         } catch (Exception e) {
             log.error("Error saving user with id {}: {}", user.getUser_id(), e.getMessage());
         }
+    }
+
+    private long getIdByEmail(String email) {
+        try {
+            return emailCache.getOrLoad(email, key -> userRepository.getUserIdByEmail(key).orElse(0L));
+        } catch (Exception e) {
+            log.error("Error getting userId with email {}: {}", email, e.getMessage());
+        }
+        return 0;
     }
 
     private UserDto toDto(Users user) {
