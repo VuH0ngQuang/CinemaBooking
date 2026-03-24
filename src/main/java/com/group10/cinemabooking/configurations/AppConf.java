@@ -15,6 +15,7 @@ public class AppConf {
     private Database database;
     private Jwt jwt;
     private PaySecret paySecret;
+    private Minio minio;
 
     @PostConstruct
     public void init() {
@@ -43,5 +44,13 @@ public class AppConf {
         private String clientId;
         private String apiKey;
         private String checksumKey;
+    }
+
+    @Data
+    public static class Minio {
+        private String url;
+        private String accessKey;
+        private String secretKey;
+        private String bucket;
     }
 }

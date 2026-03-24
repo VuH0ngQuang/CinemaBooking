@@ -33,3 +33,8 @@ build/
 .vscode/
 
 .env
+.gitnexus
+AGENTS.md
+CLAUDE.md
+.gitnexus
+.claude

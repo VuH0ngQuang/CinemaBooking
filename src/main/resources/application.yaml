@@ -29,3 +29,9 @@ app:
       clientId: ${PAYOS_CLIENT_ID}
       apiKey: ${PAYOS_API_KEY}
       checksumKey: ${PAYOS_CHECKSUM_KEY}
+
+    minio:
+      url: ${MINIO_URL}
+      accessKey: ${MINIO_ACCESS_KEY}
+      secretKey: ${MINIO_SECRET_KEY}
+      bucket: ${MINIO_BUCKET}
