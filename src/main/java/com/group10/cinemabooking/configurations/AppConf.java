@@ -16,6 +16,7 @@ public class AppConf {
     private Jwt jwt;
     private PaySecret paySecret;
     private Minio minio;
+    private String appDomain;
 
     @PostConstruct
     public void init() {
