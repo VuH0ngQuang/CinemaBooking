@@ -1,5 +1,6 @@
 package com.group10.cinemabooking.dtos;
 
+import com.group10.cinemabooking.enums.BookingSeatStatusEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,4 +15,5 @@ public class BookingSeatDto {
     private Long bookingId;
     private Long seatId;
     private Double price;
+    private BookingSeatStatusEnum status;
 }

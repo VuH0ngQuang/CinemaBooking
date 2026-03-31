@@ -15,4 +15,8 @@ public interface PaymentService {
     PaymentDto updatePayment(Long paymentId, PaymentRequestDto requestDto);
 
     void deletePayment(Long paymentId);
+
+    PaymentDto markPaymentSuccess(Long paymentId);
+
+    PaymentDto markPaymentSuccessByRef(String ref);
 }

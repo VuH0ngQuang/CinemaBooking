@@ -43,6 +43,18 @@ public class PaymentController {
         return ResponseEntity.ok(updatedPayment);
     }
 
+    @PostMapping("/{paymentId}/mark-success")
+    public ResponseEntity<PaymentDto> markPaymentSuccess(@PathVariable Long paymentId) {
+        PaymentDto updatedPayment = paymentService.markPaymentSuccess(paymentId);
+        return ResponseEntity.ok(updatedPayment);
+    }
+
+    @PostMapping("/ref/{ref}/mark-success")
+    public ResponseEntity<PaymentDto> markPaymentSuccessByRef(@PathVariable String ref) {
+        PaymentDto updatedPayment = paymentService.markPaymentSuccessByRef(ref);
+        return ResponseEntity.ok(updatedPayment);
+    }
+
     @DeleteMapping("/{paymentId}")
     public ResponseEntity<String> deletePayment(@PathVariable Long paymentId) {
         paymentService.deletePayment(paymentId);

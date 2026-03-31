@@ -2,18 +2,26 @@ package com.group10.cinemabooking.services.impl;
 
 import com.group10.cinemabooking.dtos.PaymentDto;
 import com.group10.cinemabooking.dtos.PaymentRequestDto;
+import com.group10.cinemabooking.enums.BookingSeatStatusEnum;
 import com.group10.cinemabooking.enums.BookingStatusEnum;
 import com.group10.cinemabooking.enums.PaymentStatusEnum;
+import com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum;
 import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
+import com.group10.cinemabooking.models.BookingSeats;
 import com.group10.cinemabooking.models.Bookings;
 import com.group10.cinemabooking.models.Payments;
+import com.group10.cinemabooking.models.ShowTimeSeats;
 import com.group10.cinemabooking.repository.BookingRepository;
+import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.PaymentRepository;
+import com.group10.cinemabooking.repository.ShowTimeSeatRepository;
+import com.group10.cinemabooking.services.events.PaymentSucceededEvent;
 import com.group10.cinemabooking.services.PaymentService;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +36,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
+    private final BookingSeatRepository bookingSeatRepository;
+    private final ShowTimeSeatRepository showTimeSeatRepository;
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Payments> paymentCache;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -135,17 +146,15 @@ public class PaymentServiceImpl implements PaymentService {
                 throw new InvalidRequestException("Payment amount must match booking total price");
             }
 
+            PaymentStatusEnum oldStatus = existingPayment.getStatus();
             updateFromDto(existingPayment, requestDto);
-
-            if (existingPayment.getStatus() == PaymentStatusEnum.SUCCESS) {
-                booking.setBooking_status(BookingStatusEnum.PAID);
-                booking.setConfirmed_at(new Date());
-                booking.setUpdated_at(new Date());
-                bookingRepository.save(booking);
-            }
 
             Payments updatedPayment = paymentRepository.save(existingPayment);
             paymentCache.put(updatedPayment.getPayment_id(), updatedPayment);
+
+            if (oldStatus != PaymentStatusEnum.SUCCESS && updatedPayment.getStatus() == PaymentStatusEnum.SUCCESS) {
+                return markPaymentSuccess(updatedPayment.getPayment_id());
+            }
 
             return toDto(updatedPayment);
         } finally {
@@ -174,6 +183,74 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    @Override
+    @Transactional
+    public PaymentDto markPaymentSuccess(Long paymentId) {
+        if (paymentId == null) {
+            throw new InvalidRequestException("Payment id must not be null");
+        }
+
+        String lockKey = "payment:success:" + paymentId;
+        ReentrantLock lock = lockManager.getLock(lockKey);
+        lock.lock();
+        try {
+            Payments payment = paymentRepository.findByIdForUpdate(paymentId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+
+            if (payment.getStatus() == PaymentStatusEnum.FAILED) {
+                throw new InvalidRequestException("Cannot mark a FAILED payment as SUCCESS");
+            }
+
+            Bookings booking = bookingRepository.findByIdForUpdate(payment.getBooking().getBooking_id())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Booking not found with id: " + payment.getBooking().getBooking_id()
+                    ));
+
+            if (booking.getBooking_status() == BookingStatusEnum.CANCELLED
+                    || booking.getBooking_status() == BookingStatusEnum.EXPIRED) {
+                throw new InvalidRequestException("Cannot mark payment success for inactive booking");
+            }
+            if (payment.getAmount() != booking.getTotal_price()) {
+                throw new InvalidRequestException("Payment amount must match booking total price");
+            }
+
+            boolean statusTransitioned = payment.getStatus() != PaymentStatusEnum.SUCCESS;
+            if (statusTransitioned) {
+                payment.setStatus(PaymentStatusEnum.SUCCESS);
+                payment.setUpdated_at(new Date());
+            }
+            Payments updatedPayment = paymentRepository.save(payment);
+
+            if (booking.getBooking_status() != BookingStatusEnum.CONFIRMED) {
+                booking.setBooking_status(BookingStatusEnum.PAID);
+                booking.setConfirmed_at(new Date());
+                booking.setUpdated_at(new Date());
+                bookingRepository.save(booking);
+            }
+
+            finalizeSeatsForSuccessfulPayment(booking);
+
+            paymentCache.put(updatedPayment.getPayment_id(), updatedPayment);
+            if (statusTransitioned || booking.getBooking_status() != BookingStatusEnum.CONFIRMED) {
+                eventPublisher.publishEvent(new PaymentSucceededEvent(updatedPayment.getPayment_id()));
+            }
+            return toDto(updatedPayment);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    @Transactional
+    public PaymentDto markPaymentSuccessByRef(String ref) {
+        if (ref == null || ref.isBlank()) {
+            throw new InvalidRequestException("Payment ref must not be blank");
+        }
+        Payments payment = paymentRepository.findByRefForUpdate(ref)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with ref: " + ref));
+        return markPaymentSuccess(payment.getPayment_id());
+    }
+
     private PaymentDto toDto(Payments payment) {
         return PaymentDto.builder()
                 .paymentId(payment.getPayment_id())
@@ -200,6 +277,33 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         payment.setUpdated_at(new Date());
+    }
+
+    private void finalizeSeatsForSuccessfulPayment(Bookings booking) {
+        List<BookingSeats> bookingSeats = bookingSeatRepository.findAllByBookingId(booking.getBooking_id());
+        for (BookingSeats bookingSeat : bookingSeats) {
+            long showtimeId = booking.getShowtime().getShowtime_id();
+            long seatId = bookingSeat.getSeat().getSeat_id();
+            String seatLockKey = "seat:showtime:lock:" + showtimeId + ":" + seatId;
+            ReentrantLock seatLock = lockManager.getLock(seatLockKey);
+            seatLock.lock();
+            try {
+                ShowTimeSeats sts = showTimeSeatRepository.findByShowtimeIdAndSeatId(showtimeId, seatId)
+                        .orElseGet(() -> ShowTimeSeats.builder()
+                                .showtime(booking.getShowtime())
+                                .seat(bookingSeat.getSeat())
+                                .build());
+                sts.setStatus(ShowtimeSeatsStatusEnum.BOOKED);
+                sts.setHold_token(null);
+                sts.setHold_expires_at(null);
+                showTimeSeatRepository.save(sts);
+            } finally {
+                seatLock.unlock();
+            }
+
+            bookingSeat.setStatus(BookingSeatStatusEnum.CONFIRMED);
+            bookingSeatRepository.save(bookingSeat);
+        }
     }
 
     private void validateCreateRequest(PaymentRequestDto requestDto) {

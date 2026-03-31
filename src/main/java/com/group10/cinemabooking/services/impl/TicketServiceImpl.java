@@ -121,7 +121,10 @@ public class TicketServiceImpl implements TicketService {
             }
 
             if (generatedTickets.isEmpty()) {
-                throw new InvalidRequestException("All tickets for this payment were already generated");
+                return ticketRepository.findByBookingId(booking.getBooking_id())
+                        .stream()
+                        .map(this::toDto)
+                        .toList();
             }
 
             return generatedTickets;

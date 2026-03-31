@@ -1,5 +1,6 @@
 package com.group10.cinemabooking.models;
 
+import com.group10.cinemabooking.enums.BookingSeatStatusEnum;
 import com.group10.cinemabooking.utils.IDGenerator;
 import jakarta.persistence.*;
 import lombok.*;
@@ -25,4 +26,9 @@ public class BookingSeats {
 
     @Column(nullable = false)
     private double price;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private BookingSeatStatusEnum status = BookingSeatStatusEnum.LOCKED;
 }

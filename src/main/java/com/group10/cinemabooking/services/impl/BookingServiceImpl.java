@@ -1,14 +1,23 @@
 package com.group10.cinemabooking.services.impl;
 
 import com.group10.cinemabooking.dtos.BookingDto;
+import com.group10.cinemabooking.dtos.BookingFullRequestDto;
 import com.group10.cinemabooking.dtos.BookingRequestDto;
+import com.group10.cinemabooking.dtos.SeatSelectionDto;
+import com.group10.cinemabooking.enums.BookingSeatStatusEnum;
 import com.group10.cinemabooking.enums.BookingStatusEnum;
 import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
+import com.group10.cinemabooking.models.BookingSeats;
 import com.group10.cinemabooking.models.Bookings;
+import com.group10.cinemabooking.models.Seats;
+import com.group10.cinemabooking.models.ShowTimeSeats;
 import com.group10.cinemabooking.models.Showtimes;
 import com.group10.cinemabooking.models.Users;
 import com.group10.cinemabooking.repository.BookingRepository;
+import com.group10.cinemabooking.repository.BookingSeatRepository;
+import com.group10.cinemabooking.repository.SeatRepository;
+import com.group10.cinemabooking.repository.ShowTimeSeatRepository;
 import com.group10.cinemabooking.repository.ShowtimeRepository;
 import com.group10.cinemabooking.repository.UserRepository;
 import com.group10.cinemabooking.services.BookingService;
@@ -19,7 +28,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -29,6 +40,9 @@ import java.util.concurrent.locks.ReentrantLock;
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
+    private final BookingSeatRepository bookingSeatRepository;
+    private final SeatRepository seatRepository;
+    private final ShowTimeSeatRepository showTimeSeatRepository;
     private final UserRepository userRepository;
     private final ShowtimeRepository showtimeRepository;
     private final LockManager<String> lockManager;
@@ -67,6 +81,100 @@ public class BookingServiceImpl implements BookingService {
             return toDto(savedBooking);
         } finally {
             lock.unlock();
+        }
+    }
+
+    @Override
+    @Transactional
+    public BookingDto createBookingWithSeats(BookingFullRequestDto requestDto) {
+        validateFullRequest(requestDto);
+
+        String bookingLockKey = "booking:full:create:" + requestDto.getUserId() + ":" + requestDto.getShowtimeId();
+        ReentrantLock bookingLock = lockManager.getLock(bookingLockKey);
+        bookingLock.lock();
+
+        List<Long> sortedSeatIds = requestDto.getSeats().stream()
+                .map(SeatSelectionDto::getSeatId)
+                .sorted()
+                .toList();
+        List<ReentrantLock> seatLocks = sortedSeatIds.stream()
+                .map(seatId -> lockManager.getLock("seat:showtime:lock:" + requestDto.getShowtimeId() + ":" + seatId))
+                .toList();
+
+        seatLocks.forEach(ReentrantLock::lock);
+        try {
+            Users user = userRepository.findById(requestDto.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "User not found with id: " + requestDto.getUserId()
+                    ));
+
+            Showtimes showtime = showtimeRepository.findById(requestDto.getShowtimeId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Showtime not found with id: " + requestDto.getShowtimeId()
+                    ));
+
+            for (SeatSelectionDto selection : requestDto.getSeats()) {
+                ShowTimeSeats sts = showTimeSeatRepository.findByShowtimeIdAndSeatId(requestDto.getShowtimeId(), selection.getSeatId())
+                        .orElse(null);
+                if (sts != null) {
+                    if (sts.getStatus() == com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.BOOKED) {
+                        throw new InvalidRequestException("Seat has already been selected. seatId=" + selection.getSeatId());
+                    }
+                    if (sts.getStatus() == com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.HELD
+                            && sts.getHold_expires_at() != null
+                            && sts.getHold_expires_at().after(new Date())) {
+                        throw new InvalidRequestException("Seat has already been selected. seatId=" + selection.getSeatId());
+                    }
+                }
+            }
+
+            Bookings booking = Bookings.builder()
+                    .user(user)
+                    .showtime(showtime)
+                    .total_price(requestDto.getTotalPrice())
+                    .booking_status(BookingStatusEnum.PENDING)
+                    .expired_at(buildExpiredAt())
+                    .build();
+            Bookings savedBooking = bookingRepository.save(booking);
+
+            for (SeatSelectionDto selection : requestDto.getSeats()) {
+                Seats seat = seatRepository.findById(selection.getSeatId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Seat not found with id: " + selection.getSeatId()
+                        ));
+                if (seat.getScreeningRoom() == null
+                        || seat.getScreeningRoom().getRoom_id() != showtime.getScreeningRoom().getRoom_id()) {
+                    throw new InvalidRequestException(
+                            "Seat does not belong to the showtime screening room. seatId=" + selection.getSeatId()
+                    );
+                }
+                BookingSeats bookingSeat = BookingSeats.builder()
+                        .booking(savedBooking)
+                        .seat(seat)
+                        .price(selection.getPrice())
+                        .status(BookingSeatStatusEnum.LOCKED)
+                        .build();
+                bookingSeatRepository.save(bookingSeat);
+
+                ShowTimeSeats existing = showTimeSeatRepository.findByShowtimeIdAndSeatId(showtime.getShowtime_id(), seat.getSeat_id())
+                        .orElse(null);
+                ShowTimeSeats toSave = existing != null ? existing : ShowTimeSeats.builder()
+                        .showtime(showtime)
+                        .seat(seat)
+                        .build();
+                toSave.setStatus(com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.HELD);
+                toSave.setHold_expires_at(savedBooking.getExpired_at());
+                toSave.setHold_token(String.valueOf(savedBooking.getBooking_id()));
+                showTimeSeatRepository.save(toSave);
+            }
+
+            bookingCache.put(savedBooking.getBooking_id(), savedBooking);
+            return toDto(savedBooking);
+        } finally {
+            for (int i = seatLocks.size() - 1; i >= 0; i--) {
+                seatLocks.get(i).unlock();
+            }
+            bookingLock.unlock();
         }
     }
 
@@ -182,6 +290,37 @@ public class BookingServiceImpl implements BookingService {
 
         if (requestDto.getTotalPrice() == null || requestDto.getTotalPrice() <= 0) {
             throw new InvalidRequestException("Total price must be greater than 0");
+        }
+    }
+
+    private void validateFullRequest(BookingFullRequestDto requestDto) {
+        if (requestDto == null) {
+            throw new InvalidRequestException("Request must not be null");
+        }
+        if (requestDto.getUserId() == null) {
+            throw new InvalidRequestException("User id must not be null");
+        }
+        if (requestDto.getShowtimeId() == null) {
+            throw new InvalidRequestException("Showtime id must not be null");
+        }
+        if (requestDto.getTotalPrice() == null || requestDto.getTotalPrice() <= 0) {
+            throw new InvalidRequestException("Total price must be greater than 0");
+        }
+        if (requestDto.getSeats() == null || requestDto.getSeats().isEmpty()) {
+            throw new InvalidRequestException("Seat selections must not be empty");
+        }
+
+        Set<Long> seatIds = new HashSet<>();
+        for (SeatSelectionDto seat : requestDto.getSeats()) {
+            if (seat.getSeatId() == null) {
+                throw new InvalidRequestException("Seat id must not be null");
+            }
+            if (seat.getPrice() == null || seat.getPrice() <= 0) {
+                throw new InvalidRequestException("Seat price must be greater than 0");
+            }
+            if (!seatIds.add(seat.getSeatId())) {
+                throw new InvalidRequestException("Duplicate seat selection detected. seatId=" + seat.getSeatId());
+            }
         }
     }
 

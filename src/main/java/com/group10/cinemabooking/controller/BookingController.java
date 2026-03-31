@@ -1,6 +1,7 @@
 package com.group10.cinemabooking.controller;
 
 import com.group10.cinemabooking.dtos.BookingDto;
+import com.group10.cinemabooking.dtos.BookingFullRequestDto;
 import com.group10.cinemabooking.dtos.BookingRequestDto;
 import com.group10.cinemabooking.services.BookingService;
 import jakarta.validation.Valid;
@@ -21,6 +22,12 @@ public class BookingController {
     @PostMapping
     public ResponseEntity<BookingDto> createBooking(@Valid @RequestBody BookingRequestDto requestDto) {
         BookingDto createdBooking = bookingService.createBooking(requestDto);
+        return new ResponseEntity<>(createdBooking, HttpStatus.CREATED);
+    }
+
+    @PostMapping("/full")
+    public ResponseEntity<BookingDto> createBookingWithSeats(@Valid @RequestBody BookingFullRequestDto requestDto) {
+        BookingDto createdBooking = bookingService.createBookingWithSeats(requestDto);
         return new ResponseEntity<>(createdBooking, HttpStatus.CREATED);
     }
 

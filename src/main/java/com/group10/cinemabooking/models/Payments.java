@@ -9,6 +9,12 @@ import java.util.Date;
 import java.util.List;
 
 @Entity
+@Table(
+        name = "payments",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_payment_ref", columnNames = {"ref"})
+        }
+)
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

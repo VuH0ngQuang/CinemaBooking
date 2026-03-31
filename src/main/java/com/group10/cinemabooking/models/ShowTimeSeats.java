@@ -8,6 +8,12 @@ import lombok.*;
 import java.util.Date;
 
 @Entity
+@Table(
+        name = "show_time_seats",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_showtime_seat", columnNames = {"showtime_id", "seat_id"})
+        }
+)
 @Data
 @Builder
 @AllArgsConstructor
@@ -20,7 +26,8 @@ public class ShowTimeSeats {
     private String hold_token;
     @NonNull
     @Column(nullable = false)
-    private ShowtimeSeatsStatusEnum status;
+    @Builder.Default
+    private ShowtimeSeatsStatusEnum status = ShowtimeSeatsStatusEnum.AVAILABLE;
 
 
     @ManyToOne(optional = false)
