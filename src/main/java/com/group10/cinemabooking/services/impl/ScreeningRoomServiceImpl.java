@@ -1,6 +1,7 @@
 package com.group10.cinemabooking.services.impl;
 
 import com.group10.cinemabooking.dtos.ScreeningRoomDto;
+import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.models.Cinemas;
 import com.group10.cinemabooking.models.ScreeningRooms;
@@ -12,22 +13,24 @@ import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
+@Transactional(readOnly = true)
 public class ScreeningRoomServiceImpl implements ScreeningRoomService {
 
     private static final Logger log = LoggerFactory.getLogger(ScreeningRoomServiceImpl.class);
 
     private final ScreeningRoomRepository screeningRoomRepository;
-    private final LockManager<Long> lockManager;
+    private final LockManager<String> lockManager;
     private final InAppCache<Long, ScreeningRooms> screeningRoomCache;
     private final EntityManager entityManager;
 
     public ScreeningRoomServiceImpl(ScreeningRoomRepository screeningRoomRepository,
-                                    LockManager<Long> lockManager,
+                                    LockManager<String> lockManager,
                                     InAppCache<Long, ScreeningRooms> screeningRoomCache,
                                     EntityManager entityManager) {
         this.screeningRoomRepository = screeningRoomRepository;
@@ -37,10 +40,17 @@ public class ScreeningRoomServiceImpl implements ScreeningRoomService {
     }
 
     @Override
+    @Transactional
     public ScreeningRoomDto createScreeningRoom(ScreeningRoomDto screeningRoomDto) {
+        if (screeningRoomDto == null) {
+            throw new InvalidRequestException("Screening room payload must not be null");
+        }
         ScreeningRooms screeningRoom = new ScreeningRooms();
-
-        ReentrantLock lock = lockManager.getLock(screeningRoom.getRoom_id());
+        String roomName = screeningRoomDto != null && screeningRoomDto.getRoom_name() != null
+                ? screeningRoomDto.getRoom_name().trim().toLowerCase()
+                : "unknown";
+        String lockKey = "screeningRoom:create:" + screeningRoomDto.getCinema_id() + ":" + roomName;
+        ReentrantLock lock = lockManager.getLock(lockKey);
         lock.lock();
         try {
             updateFromDto(screeningRoom, screeningRoomDto);
@@ -73,11 +83,12 @@ public class ScreeningRoomServiceImpl implements ScreeningRoomService {
     }
 
     @Override
+    @Transactional
     public ScreeningRoomDto updateScreeningRoom(Long roomId, ScreeningRoomDto screeningRoomDto) {
         ScreeningRooms existingScreeningRoom = screeningRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ResourceNotFoundException("Screening room not found with id: " + roomId));
 
-        ReentrantLock lock = lockManager.getLock(roomId);
+        ReentrantLock lock = lockManager.getLock("screeningRoom:update:" + roomId);
         lock.lock();
         try {
             updateFromDto(existingScreeningRoom, screeningRoomDto);
@@ -92,11 +103,12 @@ public class ScreeningRoomServiceImpl implements ScreeningRoomService {
     }
 
     @Override
+    @Transactional
     public void deleteScreeningRoom(Long roomId) {
         ScreeningRooms existingScreeningRoom = screeningRoomRepository.findById(roomId)
                 .orElseThrow(() -> new ResourceNotFoundException("Screening room not found with id: " + roomId));
 
-        ReentrantLock lock = lockManager.getLock(roomId);
+        ReentrantLock lock = lockManager.getLock("screeningRoom:delete:" + roomId);
         lock.lock();
         try {
             if (screeningRoomCache.contains(roomId)) {

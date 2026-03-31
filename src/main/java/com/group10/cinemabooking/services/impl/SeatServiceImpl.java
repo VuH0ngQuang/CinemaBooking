@@ -2,6 +2,7 @@ package com.group10.cinemabooking.services.impl;
 
 import com.group10.cinemabooking.dtos.SeatDto;
 import com.group10.cinemabooking.dtos.SeatRequestDto;
+import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.models.ScreeningRooms;
 import com.group10.cinemabooking.models.Seats;
@@ -12,12 +13,15 @@ import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class SeatServiceImpl implements SeatService {
 
     private final SeatRepository seatRepository;
@@ -26,6 +30,7 @@ public class SeatServiceImpl implements SeatService {
     private final InAppCache<Long, Seats> seatCache;
 
     @Override
+    @Transactional
     public SeatDto createSeat(SeatRequestDto requestDto) {
         String lockKey = "seat:create:" + requestDto.getRoom_id() + ":" + requestDto.getSeat_row() + ":" + requestDto.getSeat_col();
         ReentrantLock lock = lockManager.getLock(lockKey);
@@ -43,7 +48,7 @@ public class SeatServiceImpl implements SeatService {
             );
 
             if (existed) {
-                throw new RuntimeException("Seat already exists in this screening room.");
+                throw new InvalidRequestException("Seat already exists in this screening room.");
             }
 
             Seats seat = Seats.builder()
@@ -82,6 +87,7 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
+    @Transactional
     public SeatDto updateSeat(Long seatId, SeatRequestDto requestDto) {
         String lockKey = "seat:update:" + seatId;
         ReentrantLock lock = lockManager.getLock(lockKey);
@@ -102,12 +108,12 @@ public class SeatServiceImpl implements SeatService {
             );
 
             boolean changedPosition =
-                    existingSeat.getScreeningRoom().getRoom_id() != requestDto.getRoom_id()
+                    !Objects.equals(existingSeat.getScreeningRoom().getRoom_id(), requestDto.getRoom_id())
                         || existingSeat.getSeat_row() != requestDto.getSeat_row()
                         || existingSeat.getSeat_col() != requestDto.getSeat_col();
 
             if (changedPosition && duplicated) {
-                throw new RuntimeException("Seat already exists in this screening room.");
+                throw new InvalidRequestException("Seat already exists in this screening room.");
             }
 
             updateFromDto(existingSeat, requestDto, screeningRoom);
@@ -122,6 +128,7 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
+    @Transactional
     public void deleteSeat(Long seatId) {
         String lockKey = "seat:delete:" + seatId;
         ReentrantLock lock = lockManager.getLock(lockKey);

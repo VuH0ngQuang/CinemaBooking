@@ -14,22 +14,24 @@ import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
+@Transactional(readOnly = true)
 public class ShowtimeServiceImpl implements ShowtimeService {
 
     private static final Logger log = LoggerFactory.getLogger(ShowtimeServiceImpl.class);
 
     private final ShowtimeRepository showtimeRepository;
-    private final LockManager<Long> lockManager;
+    private final LockManager<String> lockManager;
     private final InAppCache<Long, Showtimes> showtimeCache;
     private final EntityManager entityManager;
 
     public ShowtimeServiceImpl(ShowtimeRepository showtimeRepository,
-                               LockManager<Long> lockManager,
+                               LockManager<String> lockManager,
                                InAppCache<Long, Showtimes> showtimeCache,
                                EntityManager entityManager) {
         this.showtimeRepository = showtimeRepository;
@@ -39,11 +41,17 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     @Override
+    @Transactional
     public ShowtimeDto createShowtime(ShowtimeDto showtimeDto) {
+        if (showtimeDto == null) {
+            throw new InvalidRequestException("Showtime payload must not be null");
+        }
         validateTime(showtimeDto);
 
         Showtimes showtime = new Showtimes();
-        ReentrantLock lock = lockManager.getLock(showtime.getShowtime_id());
+        String lockKey = "showtime:create:" + showtimeDto.getMovie_id() + ":" + showtimeDto.getScreening_room_id()
+                + ":" + showtimeDto.getStart_time();
+        ReentrantLock lock = lockManager.getLock(lockKey);
         lock.lock();
         try {
             updateFromDto(showtime, showtimeDto);
@@ -75,13 +83,14 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     @Override
+    @Transactional
     public ShowtimeDto updateShowtime(Long showtimeId, ShowtimeDto showtimeDto) {
         Showtimes existingShowtime = showtimeRepository.findById(showtimeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found with id: " + showtimeId));
 
         validateTime(showtimeDto);
 
-        ReentrantLock lock = lockManager.getLock(showtimeId);
+        ReentrantLock lock = lockManager.getLock("showtime:update:" + showtimeId);
         lock.lock();
         try {
             updateFromDto(existingShowtime, showtimeDto);
@@ -96,11 +105,12 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     @Override
+    @Transactional
     public void deleteShowtime(Long showtimeId) {
         Showtimes existingShowtime = showtimeRepository.findById(showtimeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found with id: " + showtimeId));
 
-        ReentrantLock lock = lockManager.getLock(showtimeId);
+        ReentrantLock lock = lockManager.getLock("showtime:delete:" + showtimeId);
         lock.lock();
         try {
             if (showtimeCache.contains(showtimeId)) {

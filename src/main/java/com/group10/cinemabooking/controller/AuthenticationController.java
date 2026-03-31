@@ -4,6 +4,7 @@ import com.group10.cinemabooking.dtos.UserDto;
 import com.group10.cinemabooking.services.JwtService;
 import com.group10.cinemabooking.services.UserService;
 import com.group10.cinemabooking.utils.InAppCache;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -38,7 +39,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody UserDto userDto) {
+    public ResponseEntity<String> login(@Valid @RequestBody UserDto userDto) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         userDto.getEmail(),
@@ -54,7 +55,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestBody UserDto userDto) {
+    public ResponseEntity<String> register(@Valid @RequestBody UserDto userDto) {
         UserDto createdUser = userService.createUser(userDto);
         if (createdUser != null) {
             return ResponseEntity.ok("User registered successfully");

@@ -15,6 +15,7 @@ import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
@@ -22,6 +23,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository paymentRepository;
@@ -30,6 +32,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final InAppCache<Long, Payments> paymentCache;
 
     @Override
+    @Transactional
     public PaymentDto createPayment(PaymentRequestDto requestDto) {
         validateCreateRequest(requestDto);
 
@@ -103,6 +106,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
+    @Transactional
     public PaymentDto updatePayment(Long paymentId, PaymentRequestDto requestDto) {
         validateUpdateRequest(requestDto);
 
@@ -150,6 +154,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
+    @Transactional
     public void deletePayment(Long paymentId) {
         String lockKey = "payment:delete:" + paymentId;
         ReentrantLock lock = lockManager.getLock(lockKey);

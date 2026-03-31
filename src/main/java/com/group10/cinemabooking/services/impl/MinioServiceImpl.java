@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.group10.cinemabooking.configurations.AppConf;
+import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.services.MinioService;
 
 import io.minio.GetPresignedObjectUrlArgs;
@@ -27,9 +28,11 @@ public class MinioServiceImpl implements MinioService {
 
     @Override
     public String uploadImage(String id) {
-        String url;
+        if (id == null || id.isBlank()) {
+            throw new InvalidRequestException("Image id must not be blank");
+        }
         try {
-            url = minioClient.getPresignedObjectUrl(
+            return minioClient.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs.builder()
                 .method(Method.PUT)
                 .bucket(appConf.getMinio().getBucket())
@@ -37,10 +40,9 @@ public class MinioServiceImpl implements MinioService {
                 .expiry(60 * 10) // 10 minutes
                 .build());
         } catch (MinioException e) {
-            url = "error";
             log.error("Error uploading image to Minio: {}", e.getMessage());
             log.error("HTTP Trace: {}", e.httpTrace());
+            throw new RuntimeException("Failed to generate Minio upload URL", e);
         }
-        return url;
     }
 }

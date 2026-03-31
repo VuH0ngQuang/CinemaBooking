@@ -9,22 +9,24 @@ import com.group10.cinemabooking.utils.LockManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
 
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
+@Transactional(readOnly = true)
 public class MovieServiceImpl implements MovieService {
 
     private static final Logger log = LoggerFactory.getLogger(MovieServiceImpl.class);
 
     private final MovieRepository movieRepository;
-    private final LockManager<Long> lockManager;
+    private final LockManager<String> lockManager;
     private final InAppCache<Long, Movies> movieCache;
 
     public MovieServiceImpl(MovieRepository movieRepository,
-                        LockManager<Long> lockManager,
+                        LockManager<String> lockManager,
                         InAppCache<Long, Movies> movieCache) {
         this.movieRepository = movieRepository;
         this.lockManager = lockManager;
@@ -32,10 +34,13 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
+    @Transactional
     public MovieDto createMovie(MovieDto movieDto) {
         Movies movie = new Movies();
-
-        ReentrantLock lock = lockManager.getLock(movie.getMovie_id());
+        String lockKey = "movie:create:" + (movieDto != null && movieDto.getTitle() != null
+                ? movieDto.getTitle().trim().toLowerCase()
+                : "unknown");
+        ReentrantLock lock = lockManager.getLock(lockKey);
         lock.lock();
         try {
             updateFromDto(movie, movieDto);
@@ -71,11 +76,12 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
+    @Transactional
     public MovieDto updateMovie(Long movieId, MovieDto movieDto) {
         Movies existingMovie = movieRepository.findById(movieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Movie not found with id: " + movieId));
 
-        ReentrantLock lock = lockManager.getLock(movieId);
+        ReentrantLock lock = lockManager.getLock("movie:update:" + movieId);
         lock.lock();
         try {
             updateFromDto(existingMovie, movieDto);
@@ -90,11 +96,12 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
+    @Transactional
     public void deleteMovie(Long movieId) {
         Movies existingMovie = movieRepository.findById(movieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Movie not found with id: " + movieId));
 
-        ReentrantLock lock = lockManager.getLock(movieId);
+        ReentrantLock lock = lockManager.getLock("movie:delete:" + movieId);
         lock.lock();
         try {
             if (movieCache.contains(movieId)) {

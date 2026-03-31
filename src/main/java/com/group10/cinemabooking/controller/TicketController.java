@@ -4,6 +4,7 @@ import com.group10.cinemabooking.dtos.TicketDto;
 import com.group10.cinemabooking.dtos.TicketValidationRequestDto;
 import com.group10.cinemabooking.dtos.TicketValidationResponseDto;
 import com.group10.cinemabooking.services.TicketService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +40,7 @@ public class TicketController {
 
     @PostMapping("/validate")
     public ResponseEntity<TicketValidationResponseDto> validateTicket(
-            @RequestBody TicketValidationRequestDto requestDto
+            @Valid @RequestBody TicketValidationRequestDto requestDto
     ) {
         return ResponseEntity.ok(ticketService.validateTicket(requestDto));
     }

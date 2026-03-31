@@ -1,6 +1,8 @@
 package com.group10.cinemabooking.services.impl;
 
 import com.group10.cinemabooking.dtos.UserDto;
+import com.group10.cinemabooking.exception.InvalidRequestException;
+import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.models.Users;
 import com.group10.cinemabooking.repository.UserRepository;
 import com.group10.cinemabooking.services.UserService;
@@ -14,23 +16,25 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
+@Transactional(readOnly = true)
 public class UserServiceImpl implements UserService {
 
     private static final Logger log = LoggerFactory.getLogger(UserServiceImpl.class);
     private final PasswordEncoder passwordEncoder;
-    private final LockManager<Long> lockManager;
+    private final LockManager<String> lockManager;
     private final InAppCache<Long, Users> userCache;
     private final InAppCache<String, Long> emailCache;
     private final UserRepository userRepository;
 
     @Autowired
-    public UserServiceImpl(LockManager<Long> lockManager,
+    public UserServiceImpl(LockManager<String> lockManager,
                            InAppCache<Long, Users> userCache,
                            InAppCache<String, Long> emailCache,
                            UserRepository userRepository,
@@ -44,69 +48,81 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserDto createUser(UserDto userDto) {
+        if (userDto == null || userDto.getEmail() == null || userDto.getEmail().isBlank()) {
+            throw new InvalidRequestException("User email must not be blank");
+        }
+        if (userDto.getPassword() == null || userDto.getPassword().isBlank()) {
+            throw new InvalidRequestException("User password must not be blank");
+        }
         Users user = new Users();
-        ReentrantLock lock = lockManager.getLock(user.getUser_id());
+        ReentrantLock lock = lockManager.getLock("user:create:" + userDto.getEmail().trim().toLowerCase());
         lock.lock();
         try {
-            user.setEmail(userDto.getEmail());
+            user.setEmail(userDto.getEmail().trim().toLowerCase());
             user.setFull_name(userDto.getFull_name());
             user.setPassword(passwordEncoder.encode(userDto.getPassword()));
             saveUser(user);
+            return toDto(user);
         } catch (Exception e) {
             log.error("Error creating user: {}", e.getMessage());
+            throw e;
         } finally {
             lock.unlock();
         }
-        return userDto;
     }
 
     @Override
     public Users getUserById(Long id) {
-        Users user = userCache.getOrLoad(id, key ->
-                userRepository.findById(key).orElse(null)
+        return userCache.getOrLoad(id, key ->
+                userRepository.findById(key)
+                        .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + key))
         );
-        if (user != null) {
-            return user;
-        }
-        return null;
     }
 
     @Override
+    @Transactional
     public UserDto updateUser(Long id, UserDto userDto) {
         Users user = userCache.getOrLoad(id, key ->
-                userRepository.findById(key).orElse(null)
+                userRepository.findById(key)
+                        .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + key))
         );
-        if (user != null) {
-            ReentrantLock lock = lockManager.getLock(id);
-            lock.lock();
-            try {
-                if (userDto.getEmail() != null) user.setEmail(userDto.getEmail());
-                if (userDto.getFull_name() != null) user.setFull_name(userDto.getFull_name());
-                if (userDto.getPassword() != null && !userDto.getPassword().isEmpty()) {
-                    user.setPassword(passwordEncoder.encode(userDto.getPassword()));
-                }
-                user.setUpdated_at(new Date());
-                saveUser(user);
-                return toDto(user);
-            } catch (Exception e) {
-                log.error("Error updating user with id {}: {}", id, e.getMessage());
-            } finally {
-                lock.unlock();
+        ReentrantLock lock = lockManager.getLock("user:update:" + id);
+        lock.lock();
+        try {
+            if (userDto.getEmail() != null) user.setEmail(userDto.getEmail().trim().toLowerCase());
+            if (userDto.getFull_name() != null) user.setFull_name(userDto.getFull_name());
+            if (userDto.getPassword() != null && !userDto.getPassword().isEmpty()) {
+                user.setPassword(passwordEncoder.encode(userDto.getPassword()));
             }
+            user.setUpdated_at(new Date());
+            saveUser(user);
+            return toDto(user);
+        } catch (Exception e) {
+            log.error("Error updating user with id {}: {}", id, e.getMessage());
+            throw e;
+        } finally {
+            lock.unlock();
         }
-        return toDto(user);
     }
 
     @Override
+    @Transactional
     public void deleteUser(Long id) {
-        ReentrantLock lock = lockManager.getLock(id);
+        ReentrantLock lock = lockManager.getLock("user:delete:" + id);
         lock.lock();
         try {
-            if(userCache.contains(id)) userCache.remove(id);
+            Users user = userRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+            if (userCache.contains(id)) userCache.remove(id);
+            if (user.getEmail() != null) {
+                emailCache.remove(user.getEmail());
+            }
             userRepository.deleteById(id);
         } catch (Exception e) {
             log.error("Error deleting user with id {}: {}", id, e.getMessage());
+            throw e;
         } finally {
             lock.unlock();
         }
@@ -114,17 +130,21 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Users getUserByEmail(String email) {
-        try {
-            return getUserById(getIdByEmail(email));
-        } catch (Exception e) {
-            log.error("Error fetching user by email {}: {}", email, e.getMessage());
-            return null;
+        long userId = getIdByEmail(email);
+        if (userId <= 0) {
+            throw new ResourceNotFoundException("User not found with email: " + email);
         }
+        return getUserById(userId);
     }
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        Users user = getUserByEmail(email);
+        Users user;
+        try {
+            user = getUserByEmail(email);
+        } catch (ResourceNotFoundException ex) {
+            throw new UsernameNotFoundException("User not found with email: " + email);
+        }
         return new User(
                 user.getEmail(),
                 user.getPassword(),
@@ -133,22 +153,13 @@ public class UserServiceImpl implements UserService {
     }
 
     private void saveUser(Users user) {
-        try {
-            userRepository.save(user);
-            userCache.put(user.getUser_id(),user);
-            emailCache.put(user.getEmail(), user.getUser_id());
-        } catch (Exception e) {
-            log.error("Error saving user with id {}: {}", user.getUser_id(), e.getMessage());
-        }
+        userRepository.save(user);
+        userCache.put(user.getUser_id(), user);
+        emailCache.put(user.getEmail(), user.getUser_id());
     }
 
     private long getIdByEmail(String email) {
-        try {
-            return emailCache.getOrLoad(email, key -> userRepository.getUserIdByEmail(key).orElse(0L));
-        } catch (Exception e) {
-            log.error("Error getting userId with email {}: {}", email, e.getMessage());
-        }
-        return 0;
+        return emailCache.getOrLoad(email, key -> userRepository.getUserIdByEmail(key).orElse(0L));
     }
 
     private UserDto toDto(Users user) {

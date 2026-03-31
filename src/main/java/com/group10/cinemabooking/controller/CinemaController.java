@@ -3,6 +3,7 @@ package com.group10.cinemabooking.controller;
 import com.group10.cinemabooking.dtos.CinemaDto;
 import com.group10.cinemabooking.dtos.CinemaRequestDto;
 import com.group10.cinemabooking.services.CinemaService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +19,7 @@ public class CinemaController {
     private final CinemaService cinemaService;
 
     @PostMapping
-    public ResponseEntity<CinemaDto> createCinema(@RequestBody CinemaRequestDto requestDto) {
+    public ResponseEntity<CinemaDto> createCinema(@Valid @RequestBody CinemaRequestDto requestDto) {
         CinemaDto createdCinema = cinemaService.createCinema(requestDto);
         return new ResponseEntity<>(createdCinema, HttpStatus.CREATED);
     }
@@ -37,7 +38,7 @@ public class CinemaController {
 
     @PutMapping("/{id}")
     public ResponseEntity<CinemaDto> updateCinema(@PathVariable("id") Long cinemaId,
-                                                  @RequestBody CinemaRequestDto requestDto) {
+                                                  @Valid @RequestBody CinemaRequestDto requestDto) {
         CinemaDto updatedCinema = cinemaService.updateCinema(cinemaId, requestDto);
         return ResponseEntity.ok(updatedCinema);
     }

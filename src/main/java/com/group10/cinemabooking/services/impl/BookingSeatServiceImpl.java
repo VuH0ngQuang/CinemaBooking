@@ -15,12 +15,14 @@ import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class BookingSeatServiceImpl implements BookingSeatService {
 
     private final BookingSeatRepository bookingSeatRepository;
@@ -30,6 +32,7 @@ public class BookingSeatServiceImpl implements BookingSeatService {
     private final InAppCache<Long, BookingSeats> bookingSeatCache;
 
     @Override
+    @Transactional
     public BookingSeatDto createBookingSeat(BookingSeatRequestDto requestDto) {
         validateRequest(requestDto);
 
@@ -95,6 +98,7 @@ public class BookingSeatServiceImpl implements BookingSeatService {
     }
 
     @Override
+    @Transactional
     public BookingSeatDto updateBookingSeat(Long bookingSeatId, BookingSeatRequestDto requestDto) {
         validateRequest(requestDto);
 
@@ -147,6 +151,7 @@ public class BookingSeatServiceImpl implements BookingSeatService {
     }
 
     @Override
+    @Transactional
     public void deleteBookingSeat(Long bookingSeatId) {
         String lockKey = "bookingSeat:delete:" + bookingSeatId;
         ReentrantLock lock = lockManager.getLock(lockKey);

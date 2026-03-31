@@ -19,6 +19,7 @@ import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -27,6 +28,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class TicketServiceImpl implements TicketService {
 
     private final TicketRepository ticketRepository;
@@ -65,6 +67,7 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
+    @Transactional
     public List<TicketDto> generateTicketsAfterSuccessfulPayment(Long paymentId) {
         if (paymentId == null) {
             throw new InvalidRequestException("Payment id must not be null");
@@ -128,6 +131,7 @@ public class TicketServiceImpl implements TicketService {
     }
 
     @Override
+    @Transactional
     public TicketValidationResponseDto validateTicket(TicketValidationRequestDto requestDto) {
         if (requestDto == null) {
             throw new InvalidRequestException("Validation request must not be null");

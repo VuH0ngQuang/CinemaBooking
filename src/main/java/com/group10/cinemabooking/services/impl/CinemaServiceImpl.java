@@ -10,12 +10,14 @@ import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class CinemaServiceImpl implements CinemaService {
 
     private final CinemaRepository cinemaRepository;
@@ -42,6 +44,7 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
+    @Transactional
     public CinemaDto createCinema(CinemaRequestDto requestDto) {
         ReentrantLock lock = lockManager.getLock("cinema_create");
         lock.lock();
@@ -79,6 +82,7 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
+    @Transactional
     public CinemaDto updateCinema(Long cinemaId, CinemaRequestDto requestDto) {
         ReentrantLock lock = lockManager.getLock(cinemaId);
         lock.lock();
@@ -98,6 +102,7 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
+    @Transactional
     public void deleteCinema(Long cinemaId) {
         ReentrantLock lock = lockManager.getLock(cinemaId);
         lock.lock();
