@@ -5,14 +5,18 @@ spring:
   application:
     name: CinemaBooking
 
-  jpa:
-    hibernate:
-      ddl-auto: update  # Options: none, validate, update, create, create-drop
-    show-sql: false      # Show SQL statements in logs
-    properties:
+  spring:
+    jpa:
       hibernate:
-        format_sql: false  # Format SQL for readability
-        dialect: org.hibernate.dialect.MySQLDialect
+        ddl-auto: update
+      show-sql: false
+      properties:
+        hibernate:
+          dialect: org.hibernate.dialect.MySQLDialect
+          jdbc.batch_size: 1000
+          order_inserts: true
+          order_updates: true
+          jdbc.batch_versioned_data: true
 
 app:
     appDomain: ${APP_DOMAIN:localhost}
