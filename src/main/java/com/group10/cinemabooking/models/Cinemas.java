@@ -19,12 +19,15 @@ public class Cinemas {
     @Id
     @Builder.Default
     private long cinemas_id = IDGenerator.generateCinemaId();
+
     @NonNull
     @Column(nullable = false)
     private String name;
+
     @NonNull
     @Column(nullable = false)
     private String address;
+
     @Builder.Default
     @Column(nullable = false)
     private Date created_at = new Date();

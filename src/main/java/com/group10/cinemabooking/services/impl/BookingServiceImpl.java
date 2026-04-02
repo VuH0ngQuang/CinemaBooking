@@ -1,19 +1,11 @@
 package com.group10.cinemabooking.services.impl;
 
-import com.group10.cinemabooking.dtos.BookingDto;
-import com.group10.cinemabooking.dtos.BookingFullRequestDto;
-import com.group10.cinemabooking.dtos.BookingRequestDto;
-import com.group10.cinemabooking.dtos.SeatSelectionDto;
+import com.group10.cinemabooking.dtos.*;
 import com.group10.cinemabooking.enums.BookingSeatStatusEnum;
 import com.group10.cinemabooking.enums.BookingStatusEnum;
 import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
-import com.group10.cinemabooking.models.BookingSeats;
-import com.group10.cinemabooking.models.Bookings;
-import com.group10.cinemabooking.models.Seats;
-import com.group10.cinemabooking.models.ShowTimeSeats;
-import com.group10.cinemabooking.models.Showtimes;
-import com.group10.cinemabooking.models.Users;
+import com.group10.cinemabooking.models.*;
 import com.group10.cinemabooking.repository.BookingRepository;
 import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.SeatRepository;
@@ -21,6 +13,8 @@ import com.group10.cinemabooking.repository.ShowTimeSeatRepository;
 import com.group10.cinemabooking.repository.ShowtimeRepository;
 import com.group10.cinemabooking.repository.UserRepository;
 import com.group10.cinemabooking.services.BookingService;
+import com.group10.cinemabooking.services.PayOSService;
+import com.group10.cinemabooking.services.PaymentService;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
@@ -47,10 +41,12 @@ public class BookingServiceImpl implements BookingService {
     private final ShowtimeRepository showtimeRepository;
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Bookings> bookingCache;
+    private final PaymentService paymentService;
+    private final PayOSService payOSService;
 
     @Override
     @Transactional
-    public BookingDto createBooking(BookingRequestDto requestDto) {
+    public String createBooking(BookingRequestDto requestDto) {
         validateRequest(requestDto);
 
         String lockKey = "booking:create:" + requestDto.getUserId() + ":" + requestDto.getShowtimeId();
@@ -78,7 +74,14 @@ public class BookingServiceImpl implements BookingService {
             Bookings savedBooking = bookingRepository.save(booking);
             bookingCache.put(savedBooking.getBooking_id(), savedBooking);
 
-            return toDto(savedBooking);
+            PaymentRequestDto paymentRequestDto = PaymentRequestDto.builder()
+                    .bookingId(savedBooking.getBooking_id())
+                    .amount(savedBooking.getTotal_price())
+                    .build();
+
+            Payments payment =  paymentService.createPayment(paymentRequestDto);
+
+            return payOSService.createPaymentRequests(payment);
         } finally {
             lock.unlock();
         }
@@ -86,7 +89,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingDto createBookingWithSeats(BookingFullRequestDto requestDto) {
+    public String createBookingWithSeats(BookingFullRequestDto requestDto) {
         validateFullRequest(requestDto);
 
         String bookingLockKey = "booking:full:create:" + requestDto.getUserId() + ":" + requestDto.getShowtimeId();
@@ -169,7 +172,15 @@ public class BookingServiceImpl implements BookingService {
             }
 
             bookingCache.put(savedBooking.getBooking_id(), savedBooking);
-            return toDto(savedBooking);
+
+            PaymentRequestDto paymentRequestDto = PaymentRequestDto.builder()
+                    .bookingId(savedBooking.getBooking_id())
+                    .amount(savedBooking.getTotal_price())
+                    .build();
+
+            Payments payments = paymentService.createPayment(paymentRequestDto);
+
+            return payOSService.createPaymentRequests(payments);
         } finally {
             for (int i = seatLocks.size() - 1; i >= 0; i--) {
                 seatLocks.get(i).unlock();

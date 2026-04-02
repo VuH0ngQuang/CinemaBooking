@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,15 +20,15 @@ public class BookingController {
 
     private final BookingService bookingService;
 
-    @PostMapping
-    public ResponseEntity<BookingDto> createBooking(@Valid @RequestBody BookingRequestDto requestDto) {
-        BookingDto createdBooking = bookingService.createBooking(requestDto);
-        return new ResponseEntity<>(createdBooking, HttpStatus.CREATED);
-    }
+//    @PostMapping
+//    public ResponseEntity<String> createBooking(@Valid @RequestBody BookingRequestDto requestDto) {
+//        String checkoutURL = bookingService.createBooking(requestDto);
+//        return new ResponseEntity<>(checkoutURL, HttpStatus.CREATED);
+//    }
 
-    @PostMapping("/full")
-    public ResponseEntity<BookingDto> createBookingWithSeats(@Valid @RequestBody BookingFullRequestDto requestDto) {
-        BookingDto createdBooking = bookingService.createBookingWithSeats(requestDto);
+    @PostMapping
+    public ResponseEntity<String> createBookingWithSeats(@Valid @RequestBody BookingFullRequestDto requestDto) {
+        String createdBooking = bookingService.createBookingWithSeats(requestDto);
         return new ResponseEntity<>(createdBooking, HttpStatus.CREATED);
     }
 

@@ -11,8 +11,8 @@ import java.util.List;
 @Entity
 @Table(
         name = "payments",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_payment_ref", columnNames = {"ref"})
+        indexes = {
+                @Index(name = "idx_payment_ref", columnList = "ref")
         }
 )
 @Data
@@ -23,22 +23,29 @@ public class Payments {
     @Id
     @Builder.Default
     private long payment_id = IDGenerator.generatePaymentId();
+
     @Builder.Default
     @Column(nullable = false)
     private Date created_at = new Date();
+
+    @Column(nullable = true)
     private Date updated_at;
+
     @NonNull
     @Column(nullable = false)
     private long amount;
+
     @Builder.Default
     @Column(nullable = false)
     private PaymentStatusEnum status = PaymentStatusEnum.PENDING;
+
     @NonNull
     @Column(nullable = false)
     private String ref;
 
     @ManyToOne(optional = false)
     private Bookings booking;
+
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TicketValidations> ticketValidations;
 }

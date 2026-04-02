@@ -7,9 +7,9 @@ import com.group10.cinemabooking.dtos.BookingRequestDto;
 import java.util.List;
 
 public interface BookingService {
-    BookingDto createBooking(BookingRequestDto requestDto);
+    String createBooking(BookingRequestDto requestDto);
 
-    BookingDto createBookingWithSeats(BookingFullRequestDto requestDto);
+    String createBookingWithSeats(BookingFullRequestDto requestDto);
 
     List<BookingDto> getAllBookings();
 

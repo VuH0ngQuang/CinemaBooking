@@ -27,7 +27,7 @@ public class DatabaseConf {
             HikariConfig config = new HikariConfig();
             config.setDriverClassName("com.mysql.cj.jdbc.Driver");
             //connection settings
-            config.setJdbcUrl(appConf.getDatabase().getUrl()+ "?rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true");
+            config.setJdbcUrl(appConf.getDatabase().getUrl());
             config.setUsername(appConf.getDatabase().getUsername());
             config.setPassword(appConf.getDatabase().getPassword());
             // --- Pool size ---

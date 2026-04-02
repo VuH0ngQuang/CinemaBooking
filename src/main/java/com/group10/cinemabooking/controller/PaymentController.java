@@ -18,11 +18,11 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
-    @PostMapping
-    public ResponseEntity<PaymentDto> createPayment(@Valid @RequestBody PaymentRequestDto requestDto) {
-        PaymentDto createdPayment = paymentService.createPayment(requestDto);
-        return new ResponseEntity<>(createdPayment, HttpStatus.CREATED);
-    }
+//    @PostMapping
+//    public ResponseEntity<PaymentDto> createPayment(@Valid @RequestBody PaymentRequestDto requestDto) {
+//        PaymentDto createdPayment = paymentService.createPayment(requestDto);
+//        return new ResponseEntity<>(createdPayment, HttpStatus.CREATED);
+//    }
 
     @GetMapping
     public ResponseEntity<List<PaymentDto>> getAllPayments() {

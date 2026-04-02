@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
@@ -44,7 +45,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public PaymentDto createPayment(PaymentRequestDto requestDto) {
+    public Payments createPayment(PaymentRequestDto requestDto) {
         validateCreateRequest(requestDto);
 
         String lockKey = "payment:create:" + requestDto.getBookingId();
@@ -77,22 +78,22 @@ public class PaymentServiceImpl implements PaymentService {
             if (hasSuccessPayment) {
                 throw new InvalidRequestException("This booking already has a successful payment");
             }
-
-            paymentRepository.findByRef(requestDto.getRef()).ifPresent(existing -> {
-                throw new InvalidRequestException("Payment ref already exists: " + requestDto.getRef());
-            });
+//
+//            paymentRepository.findByRef(requestDto.getRef()).ifPresent(existing -> {
+//                throw new InvalidRequestException("Payment ref already exists: " + requestDto.getRef());
+//            });
 
             Payments payment = Payments.builder()
                     .booking(booking)
                     .amount(requestDto.getAmount())
-                    .ref(requestDto.getRef())
+                    .ref(generateRef())
                     .status(PaymentStatusEnum.PENDING)
                     .build();
 
             Payments savedPayment = paymentRepository.save(payment);
             paymentCache.put(savedPayment.getPayment_id(), savedPayment);
 
-            return toDto(savedPayment);
+            return savedPayment;
         } finally {
             lock.unlock();
         }
@@ -130,14 +131,6 @@ public class PaymentServiceImpl implements PaymentService {
 
             if (existingPayment.getStatus() == PaymentStatusEnum.SUCCESS) {
                 throw new InvalidRequestException("Cannot update a successful payment");
-            }
-
-            if (requestDto.getRef() != null && !requestDto.getRef().equals(existingPayment.getRef())) {
-                paymentRepository.findByRef(requestDto.getRef()).ifPresent(found -> {
-                    if (found.getPayment_id() != existingPayment.getPayment_id()) {
-                        throw new InvalidRequestException("Payment ref already exists: " + requestDto.getRef());
-                    }
-                });
             }
 
             Bookings booking = existingPayment.getBooking();
@@ -268,10 +261,6 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setAmount(requestDto.getAmount());
         }
 
-        if (requestDto.getRef() != null && !requestDto.getRef().isBlank()) {
-            payment.setRef(requestDto.getRef());
-        }
-
         if (requestDto.getStatus() != null) {
             payment.setStatus(requestDto.getStatus());
         }
@@ -314,10 +303,6 @@ public class PaymentServiceImpl implements PaymentService {
         if (requestDto.getAmount() == null || requestDto.getAmount() <= 0) {
             throw new InvalidRequestException("Amount must be greater than 0");
         }
-
-        if (requestDto.getRef() == null || requestDto.getRef().isBlank()) {
-            throw new InvalidRequestException("Payment ref must not be blank");
-        }
     }
 
     private void validateUpdateRequest(PaymentRequestDto requestDto) {
@@ -325,14 +310,16 @@ public class PaymentServiceImpl implements PaymentService {
             throw new InvalidRequestException("Amount must be greater than 0");
         }
 
-        if (requestDto.getRef() != null && requestDto.getRef().isBlank()) {
-            throw new InvalidRequestException("Payment ref must not be blank");
-        }
-
-        if (requestDto.getStatus() == null
-                && requestDto.getAmount() == null
-                && requestDto.getRef() == null) {
+        if (requestDto.getStatus() == null && requestDto.getAmount() == null) {
             throw new InvalidRequestException("At least one field must be provided for update");
         }
+    }
+
+    private String generateRef() {
+        return "PAY-" + UUID.randomUUID()
+                .toString()
+                .replace("-", "")
+                .substring(0, 6)
+                .toUpperCase();
     }
 }

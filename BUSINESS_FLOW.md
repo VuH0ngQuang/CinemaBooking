@@ -7,8 +7,8 @@ This document explains the core business flow from seat selection to ticket usag
 ## 1. Seat Selection & Booking Creation
 
 - **Entry points**
-  - `POST /api/bookings` → `BookingServiceImpl.createBooking`
-  - `POST /api/bookings/full` → `BookingServiceImpl.createBookingWithSeats` (**recommended – atomic flow**)
+  - `POST /api/bookings/full` → `BookingServiceImpl.createBookingWithSeats` (**creates booking+payment and returns PayOS checkoutUrl**)
+  - `POST /api/bookings` → `BookingServiceImpl.createBooking` (available in service; controller method appears disabled in current code)
 
 - **Core behavior (`createBookingWithSeats`)**
   - Validates:
@@ -33,8 +33,10 @@ This document explains the core business flow from seat selection to ticket usag
         - `status = HELD`
         - `hold_expires_at = booking.expired_at`
         - `hold_token = <booking_id>`
+  - Creates `Payments` as `PENDING` for the new booking.
+  - Calls PayOS to create a checkout link and returns the `checkoutUrl` to the client.
 
-**Result:** seats are **held** for 10 minutes (or until payment completes), and the booking is `PENDING`.
+**Result:** seats are **held** for ~10 minutes, the booking is `PENDING`, and the API returns a PayOS `checkoutUrl` so the user can pay immediately.
 
 ### 1.1 Incremental Seat Locking (Per‑Click Flow)
 
@@ -75,7 +77,8 @@ As an alternative to the atomic `/api/bookings/full` flow, the system also suppo
 ## 2. Payment Creation
 
 - **Entry point**
-  - `POST /api/payments` → `PaymentServiceImpl.createPayment`
+  - `POST /api/bookings/full` (internal step) → `PaymentServiceImpl.createPayment`
+  - `POST /payments` → `PaymentServiceImpl.createPayment` (standalone / alternative)
 
 - **Core behavior**
   - Validates:
@@ -94,7 +97,7 @@ As an alternative to the atomic `/api/bookings/full` flow, the system also suppo
       - `status = PENDING`
       - `amount`, `ref`, `booking` set.
 
-**Result:** a `PENDING` payment exists for a `PENDING` booking; seats remain `HELD`.
+**Result:** a `PENDING` payment exists for the new booking; seats remain `HELD` until the PayOS success webhook updates the payment to `SUCCESS`.
 
 ---
 

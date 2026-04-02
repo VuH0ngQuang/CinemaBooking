@@ -28,18 +28,21 @@ public class Bookings {
     @Column(nullable = false)
     private long total_price;
 
+    @Column(nullable = true)
     private Date confirmed_at;
 
     @NonNull
     @Column(nullable = false)
     private Date expired_at;
 
+    @Column(nullable = true)
     private Date updated_at;
 
     @Column(nullable = false)
     @Builder.Default
     private Date created_at = new Date();
 
+    @Column(nullable = true)
     private Date canceled_at;
 
     @ManyToOne(optional = false)

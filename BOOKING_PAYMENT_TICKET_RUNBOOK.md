@@ -19,14 +19,11 @@
 ### Main flow
 
 1. `POST /api/bookings/full` creates booking and seat holds in one transaction.
-2. `POST /payments` creates payment as `PENDING`.
-3. Internal success path:
-   - `POST /payments/{paymentId}/mark-success` or `POST /payments/ref/{ref}/mark-success`
-   - Marks payment `SUCCESS`.
-   - Marks booking `PAID`.
-   - Converts `ShowTimeSeats` to `BOOKED`.
-   - Emits `PaymentSucceededEvent`.
-4. Async listener consumes event:
+2. In the same request, backend creates `Payments` as `PENDING`, calls PayOS to generate a `checkoutUrl`, and returns it to the client.
+3. Payment success is applied when either:
+   - PayOS sends `POST /api/webhook/payment` → `PayOSService.verifyPayment(webhook)` updates the payment to `SUCCESS`, marks booking `PAID`, converts `ShowTimeSeats` to `BOOKED`, and emits `PaymentSucceededEvent`.
+   - (Optional/manual/test) `POST /payments/{paymentId}/mark-success` or `POST /payments/ref/{ref}/mark-success`.
+4. Async listener consumes `PaymentSucceededEvent`:
    - Generates tickets idempotently.
    - Sets `BookingSeats` to `CONFIRMED`.
    - Moves booking `PAID -> CONFIRMED`.
@@ -45,7 +42,9 @@
 ### Concurrency and idempotency
 
 - In-memory locks:
+  - `booking:create:{userId}:{showtimeId}` / `booking:full:create:{userId}:{showtimeId}`
   - `seat:showtime:lock:{showtimeId}:{seatId}`
+  - `payment:create:{bookingId}`
   - `payment:success:{paymentId}`
   - `ticket:generate:payment:{paymentId}`
 - DB row locking for critical payment transitions:

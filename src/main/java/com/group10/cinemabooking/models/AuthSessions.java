@@ -18,15 +18,20 @@ public class AuthSessions {
     @Id
     @Builder.Default
     private long session_id = IDGenerator.generateAuthSessionId();
+
     @NonNull
     @Column(nullable = false)
     private Date expires_at;
+
     @NonNull
     @Column(nullable = false)
     private Date created_at;
+
     @NonNull
     @Column(nullable = false)
     private String session_token;
+
+    @Column(nullable = true)
     private Date revoked_at;
 
     @ManyToOne(optional = false)
