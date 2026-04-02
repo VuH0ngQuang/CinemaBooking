@@ -11,6 +11,7 @@ import com.group10.cinemabooking.services.ShowtimeService;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import jakarta.persistence.EntityManager;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class ShowtimeServiceImpl implements ShowtimeService {
 
     private static final Logger log = LoggerFactory.getLogger(ShowtimeServiceImpl.class);
@@ -30,15 +32,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     private final InAppCache<Long, Showtimes> showtimeCache;
     private final EntityManager entityManager;
 
-    public ShowtimeServiceImpl(ShowtimeRepository showtimeRepository,
-                               LockManager<String> lockManager,
-                               InAppCache<Long, Showtimes> showtimeCache,
-                               EntityManager entityManager) {
-        this.showtimeRepository = showtimeRepository;
-        this.lockManager = lockManager;
-        this.showtimeCache = showtimeCache;
-        this.entityManager = entityManager;
-    }
 
     @Override
     @Transactional
@@ -56,6 +49,8 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         try {
             updateFromDto(showtime, showtimeDto);
             saveShowtime(showtime);
+
+
             return toDto(showtime);
         } catch (Exception e) {
             log.error("Error creating showtime: {}", e.getMessage());
@@ -163,6 +158,9 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         }
         if (dto.getEnd_time() != null) {
             showtime.setEnd_time(dto.getEnd_time());
+        }
+        if (dto.getSeat_price() != null) {
+            showtime.setSeat_price(dto.getSeat_price());
         }
 
         showtime.setBuffer_time(dto.getBuffer_time());

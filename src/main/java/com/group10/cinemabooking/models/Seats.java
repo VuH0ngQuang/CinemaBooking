@@ -27,6 +27,9 @@ public class Seats {
     @Builder.Default
     @Column(nullable = false)
     private boolean is_active = true;
+    @NonNull
+    @Column(nullable = false)
+    private long seat_price;
 
     @OneToMany(mappedBy = "seat", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ShowTimeSeats> showtimeSeats;

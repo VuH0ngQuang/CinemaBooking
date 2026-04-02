@@ -6,5 +6,5 @@ import vn.payos.model.webhooks.WebhookData;
 
 public interface PayOSService {
     String createPaymentRequests (Payments payments);
-    void verifyPayment (Webhook webhook);
+    WebhookData verifyPayment (Webhook webhook);
 }

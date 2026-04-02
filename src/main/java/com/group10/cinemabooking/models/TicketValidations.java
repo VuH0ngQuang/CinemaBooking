@@ -4,6 +4,8 @@ import com.group10.cinemabooking.enums.TicketResultEnum;
 import com.group10.cinemabooking.utils.IDGenerator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import lombok.AllArgsConstructor;
@@ -24,6 +26,8 @@ public class TicketValidations {
     @NonNull
     @Column(nullable = false)
     private Date validated_at;
+
+    @Enumerated(EnumType.STRING)
     private TicketResultEnum result;
 
     @ManyToOne(optional = false)

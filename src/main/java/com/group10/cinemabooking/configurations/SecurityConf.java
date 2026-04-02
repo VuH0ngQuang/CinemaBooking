@@ -46,6 +46,7 @@ public class SecurityConf {
                         .requestMatchers("/api/movies/**").permitAll()
                         .requestMatchers("/api/showtimes/**").permitAll()
                         .requestMatchers("/api/screeningrooms/**").permitAll()
+                        .requestMatchers("/api/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

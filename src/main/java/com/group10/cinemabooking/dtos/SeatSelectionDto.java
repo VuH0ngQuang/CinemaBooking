@@ -17,5 +17,5 @@ public class SeatSelectionDto {
 
     @NotNull(message = "Seat price must not be null")
     @Positive(message = "Seat price must be greater than 0")
-    private Double price;
+    private Long price;
 }

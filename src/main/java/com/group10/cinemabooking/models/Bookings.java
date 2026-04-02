@@ -26,7 +26,8 @@ public class Bookings {
 
     @NonNull
     @Column(nullable = false)
-    private long total_price;
+    @Builder.Default
+    private Long total_price = 0L;
 
     @Column(nullable = true)
     private Date confirmed_at;

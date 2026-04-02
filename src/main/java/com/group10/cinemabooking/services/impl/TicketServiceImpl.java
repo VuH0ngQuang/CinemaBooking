@@ -15,8 +15,10 @@ import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.PaymentRepository;
 import com.group10.cinemabooking.repository.TicketRepository;
 import com.group10.cinemabooking.services.TicketService;
+import com.group10.cinemabooking.utils.BoundedFlushHelper;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,12 +32,15 @@ import java.util.concurrent.locks.ReentrantLock;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class TicketServiceImpl implements TicketService {
+    private static final int BATCH_FLUSH_SIZE = 1000;
+    private static final long BATCH_FLUSH_INTERVAL_MS = 1000L;
 
     private final TicketRepository ticketRepository;
     private final PaymentRepository paymentRepository;
     private final BookingSeatRepository bookingSeatRepository;
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Tickets> ticketCache;
+    private final EntityManager entityManager;
 
     @Override
     public List<TicketDto> getAllTickets() {
@@ -92,6 +97,11 @@ public class TicketServiceImpl implements TicketService {
             }
 
             List<TicketDto> generatedTickets = new ArrayList<>();
+            BoundedFlushHelper boundedFlushHelper = new BoundedFlushHelper(
+                    entityManager,
+                    BATCH_FLUSH_SIZE,
+                    BATCH_FLUSH_INTERVAL_MS
+            );
 
             for (BookingSeats bookingSeat : bookingSeats) {
                 long seatId = bookingSeat.getSeat().getSeat_id();
@@ -115,10 +125,12 @@ public class TicketServiceImpl implements TicketService {
                         .build();
 
                 Tickets savedTicket = ticketRepository.save(ticket);
+                boundedFlushHelper.onWrite();
                 ticketCache.put(savedTicket.getTicket_id(), savedTicket);
 
                 generatedTickets.add(toDto(savedTicket));
             }
+            boundedFlushHelper.forceFlush();
 
             if (generatedTickets.isEmpty()) {
                 return ticketRepository.findByBookingId(booking.getBooking_id())

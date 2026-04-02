@@ -20,15 +20,15 @@ public class BookingController {
 
     private final BookingService bookingService;
 
-//    @PostMapping
-//    public ResponseEntity<String> createBooking(@Valid @RequestBody BookingRequestDto requestDto) {
-//        String checkoutURL = bookingService.createBooking(requestDto);
-//        return new ResponseEntity<>(checkoutURL, HttpStatus.CREATED);
-//    }
-
     @PostMapping
-    public ResponseEntity<String> createBookingWithSeats(@Valid @RequestBody BookingFullRequestDto requestDto) {
-        String createdBooking = bookingService.createBookingWithSeats(requestDto);
+    public ResponseEntity<BookingDto> createBooking(@Valid @RequestBody BookingRequestDto requestDto) {
+        BookingDto bookingDto = bookingService.createBooking(requestDto);
+        return new ResponseEntity<>(bookingDto, HttpStatus.CREATED);
+    }
+
+    @PostMapping("/full")
+    public ResponseEntity<BookingDto> createBookingWithSeats(@Valid @RequestBody BookingFullRequestDto requestDto) {
+        BookingDto createdBooking = bookingService.createBookingWithSeats(requestDto);
         return new ResponseEntity<>(createdBooking, HttpStatus.CREATED);
     }
 

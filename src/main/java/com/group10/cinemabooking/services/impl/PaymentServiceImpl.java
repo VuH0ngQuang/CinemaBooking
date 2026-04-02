@@ -16,10 +16,13 @@ import com.group10.cinemabooking.repository.BookingRepository;
 import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.PaymentRepository;
 import com.group10.cinemabooking.repository.ShowTimeSeatRepository;
+import com.group10.cinemabooking.services.PayOSService;
 import com.group10.cinemabooking.services.events.PaymentSucceededEvent;
 import com.group10.cinemabooking.services.PaymentService;
+import com.group10.cinemabooking.utils.BoundedFlushHelper;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,8 @@ import java.util.concurrent.locks.ReentrantLock;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PaymentServiceImpl implements PaymentService {
+    private static final int BATCH_FLUSH_SIZE = 1000;
+    private static final long BATCH_FLUSH_INTERVAL_MS = 1000L;
 
     private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
@@ -42,10 +47,12 @@ public class PaymentServiceImpl implements PaymentService {
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Payments> paymentCache;
     private final ApplicationEventPublisher eventPublisher;
+    private final EntityManager entityManager;
+    private final PayOSService payOSService;
 
     @Override
     @Transactional
-    public Payments createPayment(PaymentRequestDto requestDto) {
+    public String createPayment(PaymentRequestDto requestDto) {
         validateCreateRequest(requestDto);
 
         String lockKey = "payment:create:" + requestDto.getBookingId();
@@ -66,10 +73,6 @@ public class PaymentServiceImpl implements PaymentService {
                 );
             }
 
-            if (requestDto.getAmount() != booking.getTotal_price()) {
-                throw new InvalidRequestException("Payment amount must match booking total price");
-            }
-
             boolean hasSuccessPayment = paymentRepository.existsByBookingIdAndStatus(
                     requestDto.getBookingId(),
                     PaymentStatusEnum.SUCCESS
@@ -85,7 +88,7 @@ public class PaymentServiceImpl implements PaymentService {
 
             Payments payment = Payments.builder()
                     .booking(booking)
-                    .amount(requestDto.getAmount())
+                    .amount(booking.getTotal_price())
                     .ref(generateRef())
                     .status(PaymentStatusEnum.PENDING)
                     .build();
@@ -93,7 +96,7 @@ public class PaymentServiceImpl implements PaymentService {
             Payments savedPayment = paymentRepository.save(payment);
             paymentCache.put(savedPayment.getPayment_id(), savedPayment);
 
-            return savedPayment;
+            return payOSService.createPaymentRequests(savedPayment);
         } finally {
             lock.unlock();
         }
@@ -135,9 +138,6 @@ public class PaymentServiceImpl implements PaymentService {
 
             Bookings booking = existingPayment.getBooking();
 
-            if (requestDto.getAmount() != null && requestDto.getAmount() != booking.getTotal_price()) {
-                throw new InvalidRequestException("Payment amount must match booking total price");
-            }
 
             PaymentStatusEnum oldStatus = existingPayment.getStatus();
             updateFromDto(existingPayment, requestDto);
@@ -203,9 +203,6 @@ public class PaymentServiceImpl implements PaymentService {
                     || booking.getBooking_status() == BookingStatusEnum.EXPIRED) {
                 throw new InvalidRequestException("Cannot mark payment success for inactive booking");
             }
-            if (payment.getAmount() != booking.getTotal_price()) {
-                throw new InvalidRequestException("Payment amount must match booking total price");
-            }
 
             boolean statusTransitioned = payment.getStatus() != PaymentStatusEnum.SUCCESS;
             if (statusTransitioned) {
@@ -270,6 +267,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void finalizeSeatsForSuccessfulPayment(Bookings booking) {
         List<BookingSeats> bookingSeats = bookingSeatRepository.findAllByBookingId(booking.getBooking_id());
+        BoundedFlushHelper boundedFlushHelper = new BoundedFlushHelper(
+                entityManager,
+                BATCH_FLUSH_SIZE,
+                BATCH_FLUSH_INTERVAL_MS
+        );
         for (BookingSeats bookingSeat : bookingSeats) {
             long showtimeId = booking.getShowtime().getShowtime_id();
             long seatId = bookingSeat.getSeat().getSeat_id();
@@ -286,30 +288,25 @@ public class PaymentServiceImpl implements PaymentService {
                 sts.setHold_token(null);
                 sts.setHold_expires_at(null);
                 showTimeSeatRepository.save(sts);
+                boundedFlushHelper.onWrite();
             } finally {
                 seatLock.unlock();
             }
 
             bookingSeat.setStatus(BookingSeatStatusEnum.CONFIRMED);
             bookingSeatRepository.save(bookingSeat);
+            boundedFlushHelper.onWrite();
         }
+        boundedFlushHelper.forceFlush();
     }
 
     private void validateCreateRequest(PaymentRequestDto requestDto) {
         if (requestDto.getBookingId() == null) {
             throw new InvalidRequestException("Booking id must not be null");
         }
-
-        if (requestDto.getAmount() == null || requestDto.getAmount() <= 0) {
-            throw new InvalidRequestException("Amount must be greater than 0");
-        }
     }
 
     private void validateUpdateRequest(PaymentRequestDto requestDto) {
-        if (requestDto.getAmount() != null && requestDto.getAmount() <= 0) {
-            throw new InvalidRequestException("Amount must be greater than 0");
-        }
-
         if (requestDto.getStatus() == null && requestDto.getAmount() == null) {
             throw new InvalidRequestException("At least one field must be provided for update");
         }

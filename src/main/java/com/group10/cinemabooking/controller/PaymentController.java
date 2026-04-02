@@ -12,17 +12,17 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/payments")
+@RequestMapping("/api/payments")
 @RequiredArgsConstructor
 public class PaymentController {
 
     private final PaymentService paymentService;
 
-//    @PostMapping
-//    public ResponseEntity<PaymentDto> createPayment(@Valid @RequestBody PaymentRequestDto requestDto) {
-//        PaymentDto createdPayment = paymentService.createPayment(requestDto);
-//        return new ResponseEntity<>(createdPayment, HttpStatus.CREATED);
-//    }
+    @PostMapping
+    public ResponseEntity<String> createPayment(@Valid @RequestBody PaymentRequestDto requestDto) {
+        String  checkoutUrl = paymentService.createPayment(requestDto);
+        return new ResponseEntity<>(checkoutUrl, HttpStatus.CREATED);
+    }
 
     @GetMapping
     public ResponseEntity<List<PaymentDto>> getAllPayments() {

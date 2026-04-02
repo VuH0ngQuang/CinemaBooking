@@ -9,7 +9,9 @@ import com.group10.cinemabooking.models.ShowTimeSeats;
 import com.group10.cinemabooking.repository.BookingRepository;
 import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.ShowTimeSeatRepository;
+import com.group10.cinemabooking.utils.BoundedFlushHelper;
 import com.group10.cinemabooking.utils.LockManager;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -21,21 +23,30 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class BookingExpiryJob {
+    private static final int BATCH_FLUSH_SIZE = 1000;
+    private static final long BATCH_FLUSH_INTERVAL_MS = 1000L;
 
     private final BookingRepository bookingRepository;
     private final BookingSeatRepository bookingSeatRepository;
     private final ShowTimeSeatRepository showTimeSeatRepository;
     private final LockManager<String> lockManager;
+    private final EntityManager entityManager;
 
     @Scheduled(fixedDelayString = "30000")
     @Transactional
     public void expirePendingBookings() {
         Date now = new Date();
         List<Bookings> expired = bookingRepository.findExpired(BookingStatusEnum.PENDING, now);
+        BoundedFlushHelper boundedFlushHelper = new BoundedFlushHelper(
+                entityManager,
+                BATCH_FLUSH_SIZE,
+                BATCH_FLUSH_INTERVAL_MS
+        );
         for (Bookings booking : expired) {
             booking.setBooking_status(BookingStatusEnum.EXPIRED);
             booking.setUpdated_at(now);
             bookingRepository.save(booking);
+            boundedFlushHelper.onWrite();
 
             List<BookingSeats> seats = bookingSeatRepository.findAllByBookingId(booking.getBooking_id());
             for (BookingSeats bs : seats) {
@@ -47,6 +58,7 @@ public class BookingExpiryJob {
                 try {
                     bs.setStatus(BookingSeatStatusEnum.RELEASED);
                     bookingSeatRepository.save(bs);
+                    boundedFlushHelper.onWrite();
 
                     ShowTimeSeats sts = showTimeSeatRepository.findByShowtimeIdAndSeatId(showtimeId, seatId).orElse(null);
                     if (sts == null) {
@@ -58,12 +70,14 @@ public class BookingExpiryJob {
                         sts.setHold_token(null);
                         sts.setHold_expires_at(null);
                         showTimeSeatRepository.save(sts);
+                        boundedFlushHelper.onWrite();
                     }
                 } finally {
                     lock.unlock();
                 }
             }
         }
+        boundedFlushHelper.forceFlush();
     }
 }
 

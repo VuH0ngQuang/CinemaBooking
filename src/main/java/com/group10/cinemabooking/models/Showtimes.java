@@ -56,6 +56,11 @@ public class Showtimes {
     @Temporal(TemporalType.TIMESTAMP)
     private Date end_time;
 
+    @NotNull(message = "Seat price must not be null")
+    @NonNull
+    @Column(nullable = false)
+    private Long seat_price;
+
     @NonNull
     @Builder.Default
     @Column(nullable = false)

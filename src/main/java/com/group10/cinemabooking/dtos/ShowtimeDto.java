@@ -20,4 +20,5 @@ public class ShowtimeDto {
     private int buffer_time;
     private Long movie_id;
     private Long screening_room_id;
+    private Long seat_price;
 }

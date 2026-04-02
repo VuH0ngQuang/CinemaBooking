@@ -5,11 +5,14 @@ import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.models.Cinemas;
 import com.group10.cinemabooking.models.ScreeningRooms;
+import com.group10.cinemabooking.models.Seats;
 import com.group10.cinemabooking.repository.ScreeningRoomRepository;
+import com.group10.cinemabooking.repository.SeatRepository;
 import com.group10.cinemabooking.services.ScreeningRoomService;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import jakarta.persistence.EntityManager;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,7 @@ import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
+@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ScreeningRoomServiceImpl implements ScreeningRoomService {
 
@@ -28,16 +32,8 @@ public class ScreeningRoomServiceImpl implements ScreeningRoomService {
     private final LockManager<String> lockManager;
     private final InAppCache<Long, ScreeningRooms> screeningRoomCache;
     private final EntityManager entityManager;
+    private final SeatRepository seatRepository;
 
-    public ScreeningRoomServiceImpl(ScreeningRoomRepository screeningRoomRepository,
-                                    LockManager<String> lockManager,
-                                    InAppCache<Long, ScreeningRooms> screeningRoomCache,
-                                    EntityManager entityManager) {
-        this.screeningRoomRepository = screeningRoomRepository;
-        this.lockManager = lockManager;
-        this.screeningRoomCache = screeningRoomCache;
-        this.entityManager = entityManager;
-    }
 
     @Override
     @Transactional
@@ -55,6 +51,29 @@ public class ScreeningRoomServiceImpl implements ScreeningRoomService {
         try {
             updateFromDto(screeningRoom, screeningRoomDto);
             saveScreeningRoom(screeningRoom);
+
+            int rows = screeningRoom.getAmount_rows();
+            int cols = screeningRoom.getAmount_cols();
+            if (rows <= 0 || cols <= 0) {
+                throw new InvalidRequestException("Room rows/cols must be > 0");
+            }
+            for (int r = 1; r <= rows; r++) {
+                if (r > 26) {
+                    throw new InvalidRequestException("Current seat_label mapping supports up to 26 rows");
+                }
+                char seatLabel = (char) ('A' + r - 1);
+                for (int c = 1; c <= cols; c++) {
+                    Seats seat = Seats.builder()
+                            .seat_row(r)
+                            .seat_col(c)
+                            .seat_label(seatLabel)
+                            .is_active(true)
+                            .screeningRoom(screeningRoom)
+                            .build();
+                    seatRepository.save(seat);
+                }
+            }
+
             return toDto(screeningRoom);
         } catch (Exception e) {
             log.error("Error creating screening room: {}", e.getMessage());

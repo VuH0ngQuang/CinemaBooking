@@ -14,6 +14,6 @@ public class BookingSeatDto {
     private Long bookingSeatId;
     private Long bookingId;
     private Long seatId;
-    private Double price;
+    private Long price;
     private BookingSeatStatusEnum status;
 }

@@ -25,7 +25,7 @@ public class BookingSeats {
     private Seats seat;
 
     @Column(nullable = false)
-    private double price;
+    private Long price;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

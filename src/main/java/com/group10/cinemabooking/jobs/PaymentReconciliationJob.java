@@ -25,7 +25,7 @@ public class PaymentReconciliationJob {
     private final PaymentService paymentService;
 
     @Scheduled(fixedDelayString = "60000")
-    @Transactional(readOnly = true)
+    @Transactional()
     public void reconcilePendingPayments() {
         Date cutoff = new Date(System.currentTimeMillis() - Duration.ofMinutes(2).toMillis());
         List<Payments> pending = paymentRepository.findPendingBefore(PaymentStatusEnum.PENDING, cutoff);

@@ -16,7 +16,6 @@ public class BookingSeatRequestDto {
     private Long bookingId;
     @NotNull(message = "Seat id must not be null")
     private Long seatId;
-    @NotNull(message = "Price must not be null")
     @Positive(message = "Price must be greater than 0")
-    private Double price;
+    private Long price;
 }

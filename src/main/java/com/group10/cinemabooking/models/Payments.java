@@ -35,6 +35,7 @@ public class Payments {
     @Column(nullable = false)
     private long amount;
 
+    @Enumerated(EnumType.STRING)
     @Builder.Default
     @Column(nullable = false)
     private PaymentStatusEnum status = PaymentStatusEnum.PENDING;

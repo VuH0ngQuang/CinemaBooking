@@ -18,11 +18,11 @@ public class SeatController {
 
     private final SeatService seatService;
 
-    @PostMapping
-    public ResponseEntity<SeatDto> createSeat(@Valid @RequestBody SeatRequestDto requestDto) {
-        SeatDto createdSeat = seatService.createSeat(requestDto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdSeat);
-    }
+//    @PostMapping
+//    public ResponseEntity<SeatDto> createSeat(@Valid @RequestBody SeatRequestDto requestDto) {
+//        SeatDto createdSeat = seatService.createSeat(requestDto);
+//        return ResponseEntity.status(HttpStatus.CREATED).body(createdSeat);
+//    }
 
     @GetMapping
     public ResponseEntity<List<SeatDto>> getAllSeats() {

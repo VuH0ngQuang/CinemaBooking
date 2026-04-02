@@ -16,7 +16,6 @@ public class PaymentRequestDto {
     private Long bookingId;
     @Positive(message = "Amount must be greater than 0")
     private Long amount;
-    @Size(min = 1, message = "Payment ref must not be blank")
     private String ref;
     private PaymentStatusEnum status;
 }

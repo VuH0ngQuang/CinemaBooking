@@ -15,6 +15,8 @@ import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.SeatRepository;
 import com.group10.cinemabooking.repository.ShowTimeSeatRepository;
 import com.group10.cinemabooking.services.BookingSeatService;
+import com.group10.cinemabooking.services.BookingService;
+import com.group10.cinemabooking.services.ShowtimeService;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class BookingSeatServiceImpl implements BookingSeatService {
     private final ShowTimeSeatRepository showTimeSeatRepository;
     private final LockManager<String> lockManager;
     private final InAppCache<Long, BookingSeats> bookingSeatCache;
+    private final BookingService bookingService;
 
     @Override
     @Transactional
@@ -113,7 +116,7 @@ public class BookingSeatServiceImpl implements BookingSeatService {
             BookingSeats bookingSeat = BookingSeats.builder()
                     .booking(booking)
                     .seat(seat)
-                    .price(requestDto.getPrice())
+                    .price(booking.getShowtime().getSeat_price())
                     .status(BookingSeatStatusEnum.LOCKED)
                     .build();
 
@@ -131,6 +134,7 @@ public class BookingSeatServiceImpl implements BookingSeatService {
             toSave.setStatus(com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.HELD);
             toSave.setHold_expires_at(booking.getExpired_at());
             toSave.setHold_token(String.valueOf(booking.getBooking_id()));
+            bookingService.updateTotalPrice(booking.getBooking_id(), booking.getTotal_price() + bookingSeat.getPrice());
             showTimeSeatRepository.save(toSave);
 
             return toDto(savedBookingSeat);
@@ -293,10 +297,6 @@ public class BookingSeatServiceImpl implements BookingSeatService {
 
         if (requestDto.getSeatId() == null) {
             throw new InvalidRequestException("Seat id must not be null");
-        }
-
-        if (requestDto.getPrice() == null || requestDto.getPrice() <= 0) {
-            throw new InvalidRequestException("Price must be greater than 0");
         }
     }
 }

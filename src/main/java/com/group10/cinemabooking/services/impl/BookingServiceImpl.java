@@ -46,7 +46,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public String createBooking(BookingRequestDto requestDto) {
+    public BookingDto createBooking(BookingRequestDto requestDto) {
         validateRequest(requestDto);
 
         String lockKey = "booking:create:" + requestDto.getUserId() + ":" + requestDto.getShowtimeId();
@@ -66,7 +66,6 @@ public class BookingServiceImpl implements BookingService {
             Bookings booking = Bookings.builder()
                     .user(user)
                     .showtime(showtime)
-                    .total_price(requestDto.getTotalPrice())
                     .booking_status(BookingStatusEnum.PENDING)
                     .expired_at(buildExpiredAt())
                     .build();
@@ -74,14 +73,7 @@ public class BookingServiceImpl implements BookingService {
             Bookings savedBooking = bookingRepository.save(booking);
             bookingCache.put(savedBooking.getBooking_id(), savedBooking);
 
-            PaymentRequestDto paymentRequestDto = PaymentRequestDto.builder()
-                    .bookingId(savedBooking.getBooking_id())
-                    .amount(savedBooking.getTotal_price())
-                    .build();
-
-            Payments payment =  paymentService.createPayment(paymentRequestDto);
-
-            return payOSService.createPaymentRequests(payment);
+            return toDto(savedBooking);
         } finally {
             lock.unlock();
         }
@@ -89,7 +81,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public String createBookingWithSeats(BookingFullRequestDto requestDto) {
+    public BookingDto createBookingWithSeats(BookingFullRequestDto requestDto) {
         validateFullRequest(requestDto);
 
         String bookingLockKey = "booking:full:create:" + requestDto.getUserId() + ":" + requestDto.getShowtimeId();
@@ -173,14 +165,7 @@ public class BookingServiceImpl implements BookingService {
 
             bookingCache.put(savedBooking.getBooking_id(), savedBooking);
 
-            PaymentRequestDto paymentRequestDto = PaymentRequestDto.builder()
-                    .bookingId(savedBooking.getBooking_id())
-                    .amount(savedBooking.getTotal_price())
-                    .build();
-
-            Payments payments = paymentService.createPayment(paymentRequestDto);
-
-            return payOSService.createPaymentRequests(payments);
+            return toDto(savedBooking);
         } finally {
             for (int i = seatLocks.size() - 1; i >= 0; i--) {
                 seatLocks.get(i).unlock();
@@ -265,6 +250,37 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    @Transactional
+    @Override
+    public void updateTotalPrice(Long bookingId, Long totalPrice) {
+        if (totalPrice == null || totalPrice <= 0) {
+            throw new InvalidRequestException("Total price must be greater than 0");
+        }
+
+        String lockKey = "booking:updatePrice:" + bookingId;
+        ReentrantLock lock = lockManager.getLock(lockKey);
+        lock.lock();
+        try {
+            Bookings booking = bookingRepository.findById(bookingId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
+
+            if (booking.getBooking_status() == BookingStatusEnum.CONFIRMED
+                    || booking.getBooking_status() == BookingStatusEnum.CANCELLED
+                    || booking.getBooking_status() == BookingStatusEnum.EXPIRED) {
+                throw new InvalidRequestException(
+                        "Cannot update price for booking with status: " + booking.getBooking_status()
+                );
+            }
+
+            booking.setTotal_price(totalPrice);
+            booking.setUpdated_at(new Date());
+            Bookings updatedBooking = bookingRepository.save(booking);
+            bookingCache.put(updatedBooking.getBooking_id(), updatedBooking);
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private BookingDto toDto(Bookings booking) {
         return BookingDto.builder()
                 .bookingId(booking.getBooking_id())
@@ -286,7 +302,6 @@ public class BookingServiceImpl implements BookingService {
                                Showtimes showtime) {
         booking.setUser(user);
         booking.setShowtime(showtime);
-        booking.setTotal_price(requestDto.getTotalPrice());
         booking.setUpdated_at(new Date());
     }
 
@@ -297,10 +312,6 @@ public class BookingServiceImpl implements BookingService {
 
         if (requestDto.getShowtimeId() == null) {
             throw new InvalidRequestException("Showtime id must not be null");
-        }
-
-        if (requestDto.getTotalPrice() == null || requestDto.getTotalPrice() <= 0) {
-            throw new InvalidRequestException("Total price must be greater than 0");
         }
     }
 

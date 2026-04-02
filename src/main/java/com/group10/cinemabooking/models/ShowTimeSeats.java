@@ -25,6 +25,7 @@ public class ShowTimeSeats {
     private Date hold_expires_at;
     private String hold_token;
     @NonNull
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
     private ShowtimeSeatsStatusEnum status = ShowtimeSeatsStatusEnum.AVAILABLE;

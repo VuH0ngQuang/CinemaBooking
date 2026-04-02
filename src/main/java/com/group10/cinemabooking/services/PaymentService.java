@@ -7,7 +7,7 @@ import com.group10.cinemabooking.models.Payments;
 import java.util.List;
 
 public interface PaymentService {
-    Payments createPayment(PaymentRequestDto requestDto);
+    String createPayment(PaymentRequestDto requestDto);
 
     List<PaymentDto> getAllPayments();
 
