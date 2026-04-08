@@ -25,10 +25,13 @@ public class ScreeningRooms {
     @Column(nullable = false)
     private int amount_cols;
 
+    @ToString.Exclude
     @ManyToOne
     private Cinemas cinema;
+    @ToString.Exclude
     @OneToMany(mappedBy = "screeningRoom", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Showtimes> showtime;
+    @ToString.Exclude
     @OneToMany(mappedBy = "screeningRoom", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Seats> seat;
 }

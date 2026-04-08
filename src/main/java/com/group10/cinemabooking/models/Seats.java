@@ -31,10 +31,13 @@ public class Seats {
     @Column(nullable = false)
     private long seat_price;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "seat", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ShowTimeSeats> showtimeSeats;
+    @ToString.Exclude
     @OneToMany(mappedBy = "seat", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookingSeats> bookingSeats;
+    @ToString.Exclude
     @ManyToOne(optional = false)
     private ScreeningRooms screeningRoom;
 

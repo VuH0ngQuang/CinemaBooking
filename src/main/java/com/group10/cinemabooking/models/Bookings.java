@@ -46,20 +46,25 @@ public class Bookings {
     @Column(nullable = true)
     private Date canceled_at;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "showtime_id", nullable = false)
     private Showtimes showtime;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private Users user;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Tickets> tickets;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payments> payments;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookingSeats> bookingSeats;
 }

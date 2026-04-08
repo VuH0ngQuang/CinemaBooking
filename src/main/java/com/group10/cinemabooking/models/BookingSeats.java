@@ -16,10 +16,12 @@ public class BookingSeats {
     @Builder.Default
     private long booking_seat_id = IDGenerator.generateBookingSeatId();
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "booking_id", nullable = false)
     private Bookings booking;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "seat_id", nullable = false)
     private Seats seat;

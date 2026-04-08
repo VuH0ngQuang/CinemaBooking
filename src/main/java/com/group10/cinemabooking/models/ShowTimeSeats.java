@@ -31,10 +31,12 @@ public class ShowTimeSeats {
     private ShowtimeSeatsStatusEnum status = ShowtimeSeatsStatusEnum.AVAILABLE;
 
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "showtime_id", nullable = false)
     private Showtimes showtime;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "seat_id", nullable = false)
     private Seats seat;

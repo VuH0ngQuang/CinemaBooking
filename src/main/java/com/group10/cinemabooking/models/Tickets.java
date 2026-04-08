@@ -44,10 +44,12 @@ public class Tickets {
     @Column(nullable = false, unique = true)
     private String ticket_code;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "booking_id", nullable = false)
     private Bookings booking;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     @JoinColumn(name = "seat_id", nullable = false)
     private Seats seat;

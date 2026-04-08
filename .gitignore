@@ -36,6 +36,8 @@ build/
 .gitnexus
 AGENTS.md
 CLAUDE.md
+GEMINI.md
 .gitnexus
 .claude
 .cursor
+.gemini

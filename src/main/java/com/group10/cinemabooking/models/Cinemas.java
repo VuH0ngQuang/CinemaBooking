@@ -32,6 +32,7 @@ public class Cinemas {
     @Column(nullable = false)
     private Date created_at = new Date();
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "cinema")
     private List<ScreeningRooms> screeningRooms;
 }

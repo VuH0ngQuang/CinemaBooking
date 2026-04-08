@@ -19,6 +19,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -79,6 +80,7 @@ public class Movies {
     @Column(nullable = false)
     private int duration_minutes;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "movie", orphanRemoval = true)
     private List<Showtimes> showtimesList;
 

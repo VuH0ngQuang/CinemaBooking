@@ -34,6 +34,7 @@ public class AuthSessions {
     @Column(nullable = true)
     private Date revoked_at;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     private Users user;
 }

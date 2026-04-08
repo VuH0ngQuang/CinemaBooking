@@ -5,9 +5,12 @@ import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.models.Users;
 import com.group10.cinemabooking.repository.UserRepository;
+import com.group10.cinemabooking.services.MailService;
 import com.group10.cinemabooking.services.UserService;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,11 +22,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     private static final Logger log = LoggerFactory.getLogger(UserServiceImpl.class);
@@ -32,20 +38,18 @@ public class UserServiceImpl implements UserService {
     private final InAppCache<Long, Users> userCache;
     private final InAppCache<String, Long> emailCache;
     private final UserRepository userRepository;
+    private final MailService mailService;
 
-    @Autowired
-    public UserServiceImpl(LockManager<String> lockManager,
-                           InAppCache<Long, Users> userCache,
-                           InAppCache<String, Long> emailCache,
-                           UserRepository userRepository,
-                           PasswordEncoder passwordEncoder
-                           ) {
-        this.passwordEncoder = passwordEncoder;
-        this.lockManager = lockManager;
-        this.userCache = userCache;
-        this.emailCache = emailCache;
-        this.userRepository = userRepository;
-    }
+//    @PostConstruct
+//    public void init(){
+//        Map<String, Object> mailVariables = new HashMap<>();
+//        mailVariables.put("username", "Vũ Hồng Quang");
+//        mailVariables.put("loginUrl", "http://localhost:1325/login");
+//        mailService.sendTemplateEmail("quangminecraft616@gmail.com",
+//                "Welcome to Cinema Booking!",
+//                "registration-confirmation",
+//                mailVariables);
+//    }
 
     @Override
     @Transactional
@@ -64,6 +68,13 @@ public class UserServiceImpl implements UserService {
             user.setFull_name(userDto.getFull_name());
             user.setPassword(passwordEncoder.encode(userDto.getPassword()));
             saveUser(user);
+            Map<String, Object> mailVariables = new HashMap<>();
+            mailVariables.put("username", user.getFull_name());
+            mailVariables.put("loginUrl", "http://localhost:1325/login");
+            mailService.sendTemplateEmail(user.getEmail(),
+                    "Welcome to Cinema Booking!",
+                    "registration-confirmation",
+                    mailVariables);
             return toDto(user);
         } catch (Exception e) {
             log.error("Error creating user: {}", e.getMessage());

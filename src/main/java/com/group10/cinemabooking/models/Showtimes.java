@@ -22,6 +22,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
+import lombok.ToString;
 
 import java.util.Date;
 import java.util.List;
@@ -76,16 +77,20 @@ public class Showtimes {
     private int buffer_time;
 
     @NotNull(message = "Screening room must not be null")
+    @ToString.Exclude
     @ManyToOne(optional = false)
     private ScreeningRooms screeningRoom;
 
     @NotNull(message = "Movie must not be null")
+    @ToString.Exclude
     @ManyToOne(optional = false)
     private Movies movie;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "showtime", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ShowTimeSeats> showtimeSeatList;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "showtime", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Bookings> bookingsList;
 

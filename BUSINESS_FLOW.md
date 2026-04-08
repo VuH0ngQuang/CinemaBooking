@@ -2,6 +2,8 @@
 
 This document explains the core business flow from seat selection to ticket usage, based on the current backend implementation.
 
+Run this code to test bussiness flow: mvn spring-boot:run -Dspring-boot.run.arguments="--app.test.run-business-flow-once=true"
+
 ---
 
 ## 1. Seat Selection & Booking Creation

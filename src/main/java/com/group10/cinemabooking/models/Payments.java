@@ -44,9 +44,11 @@ public class Payments {
     @Column(nullable = false)
     private String ref;
 
+    @ToString.Exclude
     @ManyToOne(optional = false)
     private Bookings booking;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TicketValidations> ticketValidations;
 }

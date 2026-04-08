@@ -17,6 +17,7 @@ public class AppConf {
     private PaySecret paySecret;
     private Minio minio;
     private String appDomain;
+    private Mail mail;
 
     @PostConstruct
     public void init() {
@@ -24,6 +25,9 @@ public class AppConf {
         log.info("Database URL: {}", database.getUrl());
         log.info("Database Username: {}", database.getUsername());
         log.info("JWT Expiration (ms): {}", jwt.getExpirationMs());
+        log.info("Mail host: {}", mail.getHost());
+        log.info("Mail port: {}", mail.getPort());
+        log.info("Mail username: {}", mail.getUsername());
         log.info("=====================================");
     }
 
@@ -53,5 +57,15 @@ public class AppConf {
         private String accessKey;
         private String secretKey;
         private String bucket;
+    }
+
+    @Data
+    public static class Mail {
+        private String host;
+        private int port;
+        private String username;
+        private String password;
+        private boolean auth;
+        private boolean startTls;
     }
 }
