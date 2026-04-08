@@ -1,6 +1,8 @@
 package com.group10.cinemabooking.tests;
 
 import com.group10.cinemabooking.dtos.BookingDto;
+import com.group10.cinemabooking.dtos.BookingValidationRequestDto;
+import com.group10.cinemabooking.dtos.BookingValidationResponseDto;
 import com.group10.cinemabooking.dtos.BookingRequestDto;
 import com.group10.cinemabooking.dtos.BookingSeatDto;
 import com.group10.cinemabooking.dtos.BookingSeatRequestDto;
@@ -10,8 +12,6 @@ import com.group10.cinemabooking.dtos.MovieDto;
 import com.group10.cinemabooking.dtos.ScreeningRoomDto;
 import com.group10.cinemabooking.dtos.ShowtimeDto;
 import com.group10.cinemabooking.dtos.TicketDto;
-import com.group10.cinemabooking.dtos.TicketValidationRequestDto;
-import com.group10.cinemabooking.dtos.TicketValidationResponseDto;
 import com.group10.cinemabooking.dtos.UserDto;
 import com.group10.cinemabooking.enums.AgeRatingEnum;
 import com.group10.cinemabooking.enums.BookingSeatStatusEnum;
@@ -189,15 +189,27 @@ public class BusinessFlowOneTimeRunner implements CommandLineRunner {
             }
             log.info("Generated {} tickets", generatedTickets.size());
 
-            TicketValidationResponseDto validation = ticketService.validateTicket(
-                    TicketValidationRequestDto.builder()
-                            .ticketCode(generatedTickets.get(0).getTicketCode())
+            String bookingCode = bookingRepository.findById(booking1.getBookingId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Booking not found with id: " + booking1.getBookingId()
+                    ))
+                    .getBooking_code();
+
+            BookingValidationResponseDto validation = ticketService.validateBookingCode(
+                    BookingValidationRequestDto.builder()
+                            .bookingCode(bookingCode)
                             .build()
             );
             if (!validation.isSuccess()) {
-                throw new InvalidRequestException("Ticket validation failed: " + validation.getMessage());
+                throw new InvalidRequestException("Booking validation failed: " + validation.getMessage());
             }
-            log.info("Validated ticket {} successfully", generatedTickets.get(0).getTicketCode());
+            boolean allUsed = validation.getTickets() != null
+                    && !validation.getTickets().isEmpty()
+                    && validation.getTickets().stream().allMatch(t -> "USED".equals(t.getStatus().name()));
+            if (!allUsed) {
+                throw new InvalidRequestException("Expected all booking tickets to be USED after one booking-code scan");
+            }
+            log.info("Validated booking {} successfully. All seats marked USED in one scan", bookingCode);
 
             log.warn("Business flow completed [{}]. Booking confirmation email should be sent to {}", marker, usersPair.user1().getEmail());
         } catch (Exception ex) {

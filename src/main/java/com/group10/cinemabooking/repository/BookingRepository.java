@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Bookings, Long> {
@@ -31,4 +32,19 @@ public interface BookingRepository extends JpaRepository<Bookings, Long> {
             """)
     List<Bookings> findExpired(@Param("status") BookingStatusEnum status,
                                @Param("now") Date now);
+
+    @Query("""
+            SELECT b
+            FROM Bookings b
+            WHERE b.booking_code = :bookingCode
+            """)
+    Optional<Bookings> findByBookingCode(@Param("bookingCode") String bookingCode);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT b
+            FROM Bookings b
+            WHERE b.booking_code = :bookingCode
+            """)
+    Optional<Bookings> findByBookingCodeForUpdate(@Param("bookingCode") String bookingCode);
 }

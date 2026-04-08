@@ -1,6 +1,8 @@
 package com.group10.cinemabooking.services;
 
 import com.group10.cinemabooking.dtos.TicketDto;
+import com.group10.cinemabooking.dtos.BookingValidationRequestDto;
+import com.group10.cinemabooking.dtos.BookingValidationResponseDto;
 import com.group10.cinemabooking.dtos.TicketValidationRequestDto;
 import com.group10.cinemabooking.dtos.TicketValidationResponseDto;
 
@@ -16,4 +18,6 @@ public interface TicketService {
     List<TicketDto> generateTicketsAfterSuccessfulPayment(Long paymentId);
 
     TicketValidationResponseDto validateTicket(TicketValidationRequestDto requestDto);
+
+    BookingValidationResponseDto validateBookingCode(BookingValidationRequestDto requestDto);
 }

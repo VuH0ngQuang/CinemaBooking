@@ -1,6 +1,8 @@
 package com.group10.cinemabooking.controller;
 
 import com.group10.cinemabooking.dtos.TicketDto;
+import com.group10.cinemabooking.dtos.BookingValidationRequestDto;
+import com.group10.cinemabooking.dtos.BookingValidationResponseDto;
 import com.group10.cinemabooking.dtos.TicketValidationRequestDto;
 import com.group10.cinemabooking.dtos.TicketValidationResponseDto;
 import com.group10.cinemabooking.services.TicketService;
@@ -43,5 +45,12 @@ public class TicketController {
             @Valid @RequestBody TicketValidationRequestDto requestDto
     ) {
         return ResponseEntity.ok(ticketService.validateTicket(requestDto));
+    }
+
+    @PostMapping("/validate-booking")
+    public ResponseEntity<BookingValidationResponseDto> validateBookingCode(
+            @Valid @RequestBody BookingValidationRequestDto requestDto
+    ) {
+        return ResponseEntity.ok(ticketService.validateBookingCode(requestDto));
     }
 }

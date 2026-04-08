@@ -1,250 +1,124 @@
-## Cinema Booking – End‑to‑End Business Flow
+## Cinema Booking – End-to-End Business Flow
 
-This document explains the core business flow from seat selection to ticket usage, based on the current backend implementation.
+This document reflects the **current implementation** after booking-code validation was introduced.
 
-Run this code to test bussiness flow: mvn spring-boot:run -Dspring-boot.run.arguments="--app.test.run-business-flow-once=true"
+Run one-time local business-flow smoke test:
 
----
-
-## 1. Seat Selection & Booking Creation
-
-- **Entry points**
-  - `POST /api/bookings/full` → `BookingServiceImpl.createBookingWithSeats` (**creates booking+payment and returns PayOS checkoutUrl**)
-  - `POST /api/bookings` → `BookingServiceImpl.createBooking` (available in service; controller method appears disabled in current code)
-
-- **Core behavior (`createBookingWithSeats`)**
-  - Validates:
-    - `userId`, `showtimeId`, `totalPrice` are present and > 0.
-    - `seats[]` is non‑empty, each seat has `seatId` and positive `price`.
-    - No duplicate `seatId` in the same request.
-  - Loads `Users`, `Showtimes`, and per‑seat `Seats`, ensuring each seat belongs to the showtime’s screening room.
-  - **Concurrency control**
-    - Global lock: `booking:full:create:<userId>:<showtimeId>`.
-    - Per‑seat locks (sorted by `seatId`): `seat:showtime:lock:<showtimeId>:<seatId>`.
-  - **Global seat conflict check**
-    - For each requested seat:
-      - If `ShowTimeSeats.status == BOOKED` → reject.
-      - If `ShowTimeSeats.status == HELD` **and** `hold_expires_at > now` → reject.
-  - **On success (single DB transaction)**
-    - Creates `Bookings` with:
-      - `booking_status = PENDING`
-      - `expired_at = now + 10 minutes`
-    - Creates `BookingSeats` for each selected seat.
-    - For each seat:
-      - Creates / updates `ShowTimeSeats`:
-        - `status = HELD`
-        - `hold_expires_at = booking.expired_at`
-        - `hold_token = <booking_id>`
-  - Creates `Payments` as `PENDING` for the new booking.
-  - Calls PayOS to create a checkout link and returns the `checkoutUrl` to the client.
-
-**Result:** seats are **held** for ~10 minutes, the booking is `PENDING`, and the API returns a PayOS `checkoutUrl` so the user can pay immediately.
-
-### 1.1 Incremental Seat Locking (Per‑Click Flow)
-
-As an alternative to the atomic `/api/bookings/full` flow, the system also supports **locking seats one‑by‑one** as the user clicks them in the UI.
-
-- **Entry point**
-  - `POST /api/booking-seats` → `BookingSeatServiceImpl.createBookingSeat`
-
-- **Intended usage**
-  - The user already has a `Bookings` record (e.g. created via `POST /api/bookings`).
-  - Frontend logic:
-    - On seat click (select 1A, 1B, ...):
-      - Call `POST /api/booking-seats` with `bookingId`, `seatId`, `price`.
-    - On seat unselect:
-      - Optionally call `DELETE /api/booking-seats/{bookingSeatId}` to remove and later free the seat (you can extend the delete logic to also revert `ShowTimeSeats` if desired).
-
-- **Core behavior (`createBookingSeat`)**
-  - Loads `Bookings` and verifies:
-    - Requested seat belongs to the same screening room as the booking’s showtime.
-  - **Concurrency control**
-    - Lock key: `bookingSeat:create:<showtimeId>:<seatId>` ensures only one writer per seat+showtime at a time.
-  - **Global seat conflict check**
-    - Uses `BookingSeatRepository.existsActiveSeatByShowtimeAndSeatId(showtimeId, seatId)` to see if any *active* booking has already taken this seat.
-    - Also checks `ShowTimeSeats`:
-      - `status == BOOKED` → reject.
-      - `status == HELD` with `hold_expires_at > now` → reject.
-  - **On success**
-    - Creates a `BookingSeats` row for `(booking, seat)`.
-    - Creates/updates `ShowTimeSeats` with:
-      - `status = HELD`
-      - `hold_expires_at = booking.expired_at`
-      - `hold_token = <booking_id>`.
-
-**Result:** if your frontend calls `POST /api/booking-seats` on each click, seats like 1A and 1B are **locked immediately at click time**, not only at the final “Book” action.
+```bash
+mvn spring-boot:run -Dspring-boot.run.arguments="--app.test.run-business-flow-once=true"
+```
 
 ---
 
-## 2. Payment Creation
+## 1) Booking and Seat Hold
 
-- **Entry point**
-  - `POST /api/bookings/full` (internal step) → `PaymentServiceImpl.createPayment`
-  - `POST /payments` → `PaymentServiceImpl.createPayment` (standalone / alternative)
+### Option A: Create booking first, then lock seats incrementally
 
-- **Core behavior**
-  - Validates:
-    - `bookingId` is present.
-    - `amount > 0`.
-    - `ref` (gateway reference / order code) is non‑blank and unique.
-  - Loads `Bookings` by `bookingId`.
-  - Rejects if booking status is any of:
-    - `CANCELLED`, `EXPIRED`, `CONFIRMED`, `PAID`.
-  - Enforces **amount integrity**:
-    - `amount == booking.total_price`.
-  - Enforces **single successful payment per booking**:
-    - If `existsByBookingIdAndStatus(bookingId, SUCCESS)` → reject.
-  - On success:
-    - Creates `Payments`:
-      - `status = PENDING`
-      - `amount`, `ref`, `booking` set.
+1. `POST /api/bookings` creates a booking (`PENDING`, with `expired_at` = now + ~10 minutes).
+2. `POST /api/booking-seats` adds seats one-by-one:
+   - validates seat belongs to booking showtime room
+   - rejects seat if already held/booked by another active booking
+   - creates `BookingSeats` row (`LOCKED`)
+   - updates/creates `ShowTimeSeats` to `HELD` with `hold_token = booking_id`
+   - updates booking total price
 
-**Result:** a `PENDING` payment exists for the new booking; seats remain `HELD` until the PayOS success webhook updates the payment to `SUCCESS`.
+### Option B: Create booking with seats atomically
+
+`POST /api/bookings/full` performs booking + seat hold in one transaction:
+
+- validates seat list (non-empty, unique seat IDs, positive price)
+- acquires deterministic seat locks for concurrency safety
+- creates booking + all `BookingSeats`
+- sets related `ShowTimeSeats` to `HELD`
 
 ---
 
-## 3. Payment Completion (Gateway / PayOS)
+## 2) Payment
 
-> You will handle all PayOS‑specific logic yourself. Below is how it integrates with internal services.
+Use `POST /api/payments` with `bookingId`.
 
-- **External event**
-  - Payment gateway (PayOS) sends a webhook to `POST /api/webhook/payment`.
-  - `WebhookController.handlePaymentWebhook` delegates to `PayOSService.verifyPayment(webhook)`.
+`PaymentService.createPayment(...)`:
 
-- **Expected internal behavior (high level)**
-  1. Verify the webhook (signature, amount, currency, merchant, status).
-  2. Map webhook data (e.g. `orderCode` / reference) to your `Payments.ref` (or `Payments.payment_id`).
-  3. In a transaction:
-     - Mark the `Payments` row as `SUCCESS` **once**.
-       - Use `PaymentService.updatePayment(paymentId, PaymentRequestDto{ status = SUCCESS })`.
-       - This method:
-         - Prevents updates once `status == SUCCESS`.
-         - When status becomes `SUCCESS`, it:
-           - Sets `booking.booking_status = PAID`
-           - Sets `booking.confirmed_at` and `booking.updated_at` to `now`.
-     - Trigger ticket generation:
-       - Call `TicketService.generateTicketsAfterSuccessfulPayment(paymentId)`.
+- rejects inactive booking statuses (`CANCELLED`, `EXPIRED`, `CONFIRMED`, `PAID`)
+- rejects if booking already has a successful payment
+- creates a `PENDING` payment
+- returns PayOS checkout URL (from `PayOSService`)
 
-**Result:** booking is `PAID`, payment is `SUCCESS`, and tickets can be generated exactly once for each seat.
+On payment success:
+
+- `PaymentService.markPaymentSuccess(...)` marks payment `SUCCESS`
+- booking status moves to `PAID`
+- seat holds are finalized to `BOOKED`
+- `PaymentSucceededEvent` is published
 
 ---
 
-## 4. Ticket Generation
+## 3) Ticket Generation
 
-- **Entry point**
-  - Service‑side call (typically from webhook / payment success handler):
-    - `TicketServiceImpl.generateTicketsAfterSuccessfulPayment(Long paymentId)`
+Triggered by payment success (event/webhook/manual endpoint):
 
-- **Core behavior**
-  - Validates:
-    - `paymentId` is not null.
-  - Lock: `ticket:generate:payment:<paymentId>` (ensures idempotency per payment).
-  - Loads `Payments` and checks:
-    - `status == PaymentStatusEnum.SUCCESS`, otherwise rejects.
-  - Loads `Bookings` from the payment and all `BookingSeats` for the booking.
-    - If no `BookingSeats` → rejects.
-  - For each `BookingSeat`:
-    - If `TicketRepository.existsByBookingIdAndSeatId(bookingId, seatId)` → **skip** (already has ticket).
-    - Else create `Tickets`:
-      - `booking`, `seat`
-      - `ticket_code` = unique code (time + random suffix)
-      - `issued_at = now`
-      - `valid_until = showtime.end_time + 30 minutes`
-      - `status = VALID`
-  - If no new tickets created (all seats already had tickets) → rejects with a clear message.
+- `TicketService.generateTicketsAfterSuccessfulPayment(paymentId)`
+- one ticket per `(booking, seat)` if not already exists
+- ticket defaults:
+  - `status = VALID`
+  - `issued_at = now`
+  - `valid_until = showtime.end_time + 30 minutes`
 
-**Result:** each paid and seated booking has exactly one **valid** ticket per seat; duplicate calls are safe.
+Also sends booking confirmation email (after commit) using:
+
+- template: `mail/booking-confirmation`
+- QR payload: **booking_code** (not per-seat ticket code)
 
 ---
 
-## 5. Ticket Validation (At Cinema)
+## 4) Validation at Cinema
 
-- **Entry point**
-  - `POST /api/tickets/validate` → `TicketServiceImpl.validateTicket`
+### Legacy single-seat scan
 
-- **Core behavior**
-  - Validates request and ticket code.
-  - Lock: `ticket:validate:<ticketCode>`.
-  - Loads `Tickets` by `ticket_code`.
-  - Evaluates status:
-    - If `status == USED` → return `success = false`, message `"Ticket already used"`.
-    - If `status == EXPIRED` **or** `valid_until < now`:
-      - If not already `EXPIRED`, update status to `EXPIRED`.
-      - Return `success = false`, message `"Ticket expired"`.
-    - Otherwise:
-      - Update:
-        - `status = USED`
-        - `used_at = now`
-      - Return `success = true`, message `"Ticket is valid and has been marked as used"`.
+`POST /api/tickets/validate`
 
-**Result:** tickets can be safely scanned exactly once; reused or expired tickets are rejected with clear reasons.
+- validates one `ticketCode`
+- marks only that ticket `USED`
 
----
+### New business flow: one scan for all seats in booking
 
-## 6. Booking Expiry & Seat Release
+`POST /api/tickets/validate-booking`
 
-- **Entry point**
-  - Scheduled job: `BookingExpiryJob.expirePendingBookings()`
-  - Runs every **30 seconds**.
+- input: `bookingCode`
+- finds booking by `booking_code`
+- loads all tickets in booking
+- in one transaction/lock:
+  - marks all valid tickets to `USED` with same timestamp
+  - returns all tickets in response
 
-- **Core behavior**
-  - Finds all `Bookings` with:
-    - `status = PENDING`
-    - `expired_at < now`.
-  - For each expired booking:
-    - Set:
-      - `booking_status = EXPIRED`
-      - `updated_at = now`
-    - Save booking.
-    - Load all `BookingSeats` for that booking.
-    - For each seat:
-      - Acquire lock: `seat:showtime:lock:<showtimeId>:<seatId>`.
-      - Load `ShowTimeSeats` for `(showtimeId, seatId)`.
-      - If:
-        - `status == HELD`
-        - `hold_token == <booking_id>` (string compare)
-        - Then:
-          - Set `status = AVAILABLE`
-          - Clear `hold_token` and `hold_expires_at`.
-          - Save `ShowTimeSeats`.
-
-**Result:** if a user never completes payment, their booking becomes `EXPIRED` and held seats are safely returned to `AVAILABLE` for others.
+This supports: **1 QR scan -> redeem all seats in same booking**.
 
 ---
 
-## 7. Key Invariants & Idempotency Rules
+## 5) Booking Code
 
-- **Booking**
-  - Initially `PENDING` after booking (with or without seats).
-  - Moves to `EXPIRED` automatically if not paid before `expired_at`.
-  - Moves to `PAID` when a related payment becomes `SUCCESS`.
-  - `CONFIRMED` is available for future use if you want an extra state (e.g., after ticket generation or manual staff confirmation).
+`Bookings.booking_code` exists and is unique.
 
-- **Payment**
-  - Only one `SUCCESS` payment per booking is allowed.
-  - Once `SUCCESS`, it cannot be updated or deleted.
+- auto-generated on persist if empty:
+  - format: `BOOKING-<booking_id>`
 
-- **Seats (`ShowTimeSeats`)**
-  - `AVAILABLE` → can be selected.
-  - `HELD` → reserved for a specific booking until `hold_expires_at`, keyed by `hold_token = booking_id`.
-  - `BOOKED` → recommended for you to use after successful payment (you can extend logic to set this when payment succeeds).
-
-- **Tickets**
-  - Generated only when payment is `SUCCESS`.
-  - Exactly one ticket per `(bookingId, seatId)`.
-  - Status lifecycle: `VALID` → `USED` or `EXPIRED`.
+This is now the recommended code for entry scanning and email QR.
 
 ---
 
-## 8. Where to Extend Next
+## 6) Expiry Job
 
-- **PayOS integration**
-  - Implement detailed verification and mapping from webhooks to `Payments` and `Bookings`.
-  - Call `PaymentService.updatePayment(...SUCCESS...)` and then `TicketService.generateTicketsAfterSuccessfulPayment(...)`.
+`BookingExpiryJob` runs periodically and expires stale `PENDING` bookings:
 
-- **Reconciliation**
-  - Periodic job to query PayOS for definitive status of `PENDING` payments and reconcile with local DB.
+- booking status -> `EXPIRED`
+- corresponding `ShowTimeSeats` held by that booking -> `AVAILABLE`
 
-- **Seat “BOOKED” update**
-  - After payment success, update `ShowTimeSeats` from `HELD` → `BOOKED` for that booking’s seats.
+---
+
+## 7) Key Invariants
+
+- one active ticket row per seat per booking (`booking_id`, `seat_id`)
+- booking-level scan is done through `booking_code`
+- payment success is idempotent/locked
+- ticket generation is idempotent per payment
 

@@ -1,6 +1,8 @@
 package com.group10.cinemabooking.services.impl;
 
 import com.group10.cinemabooking.configurations.AppConf;
+import com.group10.cinemabooking.dtos.BookingValidationRequestDto;
+import com.group10.cinemabooking.dtos.BookingValidationResponseDto;
 import com.group10.cinemabooking.dtos.TicketDto;
 import com.group10.cinemabooking.dtos.TicketValidationRequestDto;
 import com.group10.cinemabooking.dtos.TicketValidationResponseDto;
@@ -10,6 +12,7 @@ import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.models.*;
 import com.group10.cinemabooking.repository.BookingSeatRepository;
+import com.group10.cinemabooking.repository.BookingRepository;
 import com.group10.cinemabooking.repository.PaymentRepository;
 import com.group10.cinemabooking.repository.TicketRepository;
 import com.group10.cinemabooking.services.MailService;
@@ -38,6 +41,7 @@ public class TicketServiceImpl implements TicketService {
     private final TicketRepository ticketRepository;
     private final PaymentRepository paymentRepository;
     private final BookingSeatRepository bookingSeatRepository;
+    private final BookingRepository bookingRepository;
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Tickets> ticketCache;
     private final EntityManager entityManager;
@@ -205,6 +209,85 @@ public class TicketServiceImpl implements TicketService {
         }
     }
 
+    @Override
+    @Transactional
+    public BookingValidationResponseDto validateBookingCode(BookingValidationRequestDto requestDto) {
+        if (requestDto == null || requestDto.getBookingCode() == null || requestDto.getBookingCode().isBlank()) {
+            throw new InvalidRequestException("Booking code must not be blank");
+        }
+
+        String bookingCode = requestDto.getBookingCode().trim();
+        String lockKey = "ticket:validate:booking:" + bookingCode;
+        ReentrantLock lock = lockManager.getLock(lockKey);
+        lock.lock();
+        try {
+            Bookings booking = bookingRepository.findByBookingCodeForUpdate(bookingCode)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Booking not found with code: " + bookingCode
+                    ));
+
+            List<Tickets> tickets = ticketRepository.findByBookingId(booking.getBooking_id());
+            if (tickets.isEmpty()) {
+                throw new InvalidRequestException("No tickets found for booking code: " + bookingCode);
+            }
+
+            Date now = new Date();
+            boolean hasValid = false;
+            boolean hasUsed = false;
+            List<TicketDto> updatedTickets = new ArrayList<>();
+
+            for (Tickets ticket : tickets) {
+                if (ticket.getStatus() == TicketStatusEnum.USED) {
+                    hasUsed = true;
+                    updatedTickets.add(toDto(ticket));
+                    continue;
+                }
+                if (ticket.getStatus() == TicketStatusEnum.EXPIRED || ticket.getValid_until().before(now)) {
+                    if (ticket.getStatus() != TicketStatusEnum.EXPIRED) {
+                        ticket.setStatus(TicketStatusEnum.EXPIRED);
+                        ticket = ticketRepository.save(ticket);
+                    }
+                    updatedTickets.add(toDto(ticket));
+                    continue;
+                }
+
+                hasValid = true;
+                ticket.setStatus(TicketStatusEnum.USED);
+                ticket.setUsed_at(now);
+                Tickets saved = ticketRepository.save(ticket);
+                ticketCache.put(saved.getTicket_id(), saved);
+                updatedTickets.add(toDto(saved));
+            }
+
+            if (hasValid) {
+                return BookingValidationResponseDto.builder()
+                        .success(true)
+                        .message("Booking is valid and all tickets have been marked as used")
+                        .bookingCode(bookingCode)
+                        .tickets(updatedTickets)
+                        .build();
+            }
+
+            if (hasUsed) {
+                return BookingValidationResponseDto.builder()
+                        .success(false)
+                        .message("All booking tickets already used")
+                        .bookingCode(bookingCode)
+                        .tickets(updatedTickets)
+                        .build();
+            }
+
+            return BookingValidationResponseDto.builder()
+                    .success(false)
+                    .message("All booking tickets expired")
+                    .bookingCode(bookingCode)
+                    .tickets(updatedTickets)
+                    .build();
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private TicketDto toDto(Tickets ticket) {
         return TicketDto.builder()
                 .ticketId(ticket.getTicket_id())
@@ -281,13 +364,15 @@ public class TicketServiceImpl implements TicketService {
         if (showtime == null || showtime.getMovie() == null || showtime.getScreeningRoom() == null) return;
         ScreeningRooms room = showtime.getScreeningRoom();
         Cinemas cinema = room.getCinema();
+        String bookingCode = (booking.getBooking_code() == null || booking.getBooking_code().isBlank())
+                ? "BOOKING-" + booking.getBooking_id()
+                : booking.getBooking_code();
         String seatNumbers = bookingSeats
                 .stream()
                 .map(bs -> String.valueOf(bs.getSeat().getSeat_label()) + bs.getSeat().getSeat_col())
                 .sorted()
                 .collect(Collectors.joining(", "));
-        String primaryTicketCode = tickets.get(0).getTicketCode();
-        String qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + primaryTicketCode;
+        String qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + bookingCode;
         String showDateTime = new SimpleDateFormat("dd/MM/yyyy HH:mm").format(showtime.getStart_time());
         String totalAmount = String.format("%,d VNĐ", booking.getTotal_price());
         Map<String, Object> vars = new HashMap<>();
@@ -296,7 +381,7 @@ public class TicketServiceImpl implements TicketService {
         vars.put("showDateTime", showDateTime);
         vars.put("screenRoom", room.getRoom_name());
         vars.put("seatNumbers", seatNumbers);
-        vars.put("ticketCode", primaryTicketCode);
+        vars.put("ticketCode", bookingCode);
         vars.put("qrCodeUrl", qrCodeUrl);
         vars.put("cinemaName", cinema != null ? cinema.getName() : "Cinema");
         vars.put("cinemaAddress", cinema != null ? cinema.getAddress() : "");

@@ -19,6 +19,9 @@ public class Bookings {
     @Builder.Default
     private long booking_id = IDGenerator.generateBookingId();
 
+    @Column(nullable = true, unique = true)
+    private String booking_code;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
@@ -67,4 +70,11 @@ public class Bookings {
     @ToString.Exclude
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookingSeats> bookingSeats;
+
+    @PrePersist
+    private void ensureBookingCode() {
+        if (booking_code == null || booking_code.isBlank()) {
+            booking_code = "BOOKING-" + booking_id;
+        }
+    }
 }
