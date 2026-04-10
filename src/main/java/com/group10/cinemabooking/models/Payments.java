@@ -45,7 +45,7 @@ public class Payments {
     private String ref;
 
     @ToString.Exclude
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private Bookings booking;
 
     @ToString.Exclude

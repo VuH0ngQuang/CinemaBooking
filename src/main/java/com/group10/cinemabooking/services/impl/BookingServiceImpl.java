@@ -24,9 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -108,16 +110,26 @@ public class BookingServiceImpl implements BookingService {
                             "Showtime not found with id: " + requestDto.getShowtimeId()
                     ));
 
+            // Batch-fetch existing show_time_seats and seats once instead of per-iteration lookups.
+            Map<Long, ShowTimeSeats> existingStsBySeatId = showTimeSeatRepository
+                    .findAllByShowtimeIdAndSeatIdIn(showtime.getShowtime_id(), sortedSeatIds)
+                    .stream()
+                    .collect(Collectors.toMap(s -> s.getSeat().getSeat_id(), s -> s));
+
+            Map<Long, Seats> seatById = seatRepository.findAllById(sortedSeatIds)
+                    .stream()
+                    .collect(Collectors.toMap(Seats::getSeat_id, s -> s));
+
+            Date now = new Date();
             for (SeatSelectionDto selection : requestDto.getSeats()) {
-                ShowTimeSeats sts = showTimeSeatRepository.findByShowtimeIdAndSeatId(requestDto.getShowtimeId(), selection.getSeatId())
-                        .orElse(null);
+                ShowTimeSeats sts = existingStsBySeatId.get(selection.getSeatId());
                 if (sts != null) {
                     if (sts.getStatus() == com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.BOOKED) {
                         throw new InvalidRequestException("Seat has already been selected. seatId=" + selection.getSeatId());
                     }
                     if (sts.getStatus() == com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.HELD
                             && sts.getHold_expires_at() != null
-                            && sts.getHold_expires_at().after(new Date())) {
+                            && sts.getHold_expires_at().after(now)) {
                         throw new InvalidRequestException("Seat has already been selected. seatId=" + selection.getSeatId());
                     }
                 }
@@ -133,10 +145,12 @@ public class BookingServiceImpl implements BookingService {
             Bookings savedBooking = bookingRepository.save(booking);
 
             for (SeatSelectionDto selection : requestDto.getSeats()) {
-                Seats seat = seatRepository.findById(selection.getSeatId())
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "Seat not found with id: " + selection.getSeatId()
-                        ));
+                Seats seat = seatById.get(selection.getSeatId());
+                if (seat == null) {
+                    throw new ResourceNotFoundException(
+                            "Seat not found with id: " + selection.getSeatId()
+                    );
+                }
                 if (seat.getScreeningRoom() == null
                         || seat.getScreeningRoom().getRoom_id() != showtime.getScreeningRoom().getRoom_id()) {
                     throw new InvalidRequestException(
@@ -151,8 +165,7 @@ public class BookingServiceImpl implements BookingService {
                         .build();
                 bookingSeatRepository.save(bookingSeat);
 
-                ShowTimeSeats existing = showTimeSeatRepository.findByShowtimeIdAndSeatId(showtime.getShowtime_id(), seat.getSeat_id())
-                        .orElse(null);
+                ShowTimeSeats existing = existingStsBySeatId.get(selection.getSeatId());
                 ShowTimeSeats toSave = existing != null ? existing : ShowTimeSeats.builder()
                         .showtime(showtime)
                         .seat(seat)
@@ -176,7 +189,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public List<BookingDto> getAllBookings() {
-        return bookingRepository.findAll()
+        return bookingRepository.findAllJoinFetch()
                 .stream()
                 .map(this::toDto)
                 .toList();

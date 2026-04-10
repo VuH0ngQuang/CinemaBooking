@@ -50,7 +50,7 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     public List<TicketDto> getAllTickets() {
-        return ticketRepository.findAll()
+        return ticketRepository.findAllJoinFetch()
                 .stream()
                 .map(this::toDto)
                 .toList();
@@ -95,12 +95,27 @@ public class TicketServiceImpl implements TicketService {
                 throw new InvalidRequestException("Tickets can only be generated when payment status is SUCCESS");
             }
 
-            Bookings booking = payment.getBooking();
-            List<BookingSeats> bookingSeats = bookingSeatRepository.findAllByBookingId(booking.getBooking_id());
+            // Refetch booking with the full association graph required for the post-commit
+            // confirmation email so its lazy proxies are initialized inside this transaction.
+            Long bookingId = payment.getBooking().getBooking_id();
+            Bookings booking = bookingRepository.findByIdWithDetails(bookingId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Booking not found with id: " + bookingId
+                    ));
+            // Join-fetch seat so booking-seat → seat is initialized for the email and ticket build.
+            List<BookingSeats> bookingSeats = bookingSeatRepository.findAllByBookingIdJoinFetchSeat(bookingId);
 
             if (bookingSeats.isEmpty()) {
                 throw new InvalidRequestException("Cannot generate ticket because booking has no seats");
             }
+
+            // Batch the per-seat existence check.
+            List<Long> seatIds = bookingSeats.stream()
+                    .map(bs -> bs.getSeat().getSeat_id())
+                    .toList();
+            Set<Long> existingSeatIds = new HashSet<>(
+                    ticketRepository.findExistingSeatIdsByBookingIdAndSeatIdIn(bookingId, seatIds)
+            );
 
             List<TicketDto> generatedTickets = new ArrayList<>();
             BoundedFlushHelper boundedFlushHelper = new BoundedFlushHelper(
@@ -112,12 +127,7 @@ public class TicketServiceImpl implements TicketService {
             for (BookingSeats bookingSeat : bookingSeats) {
                 long seatId = bookingSeat.getSeat().getSeat_id();
 
-                boolean alreadyExists = ticketRepository.existsByBookingIdAndSeatId(
-                        booking.getBooking_id(),
-                        seatId
-                );
-
-                if (alreadyExists) {
+                if (existingSeatIds.contains(seatId)) {
                     continue;
                 }
 
@@ -138,7 +148,7 @@ public class TicketServiceImpl implements TicketService {
             }
             boundedFlushHelper.forceFlush();
             if (generatedTickets.isEmpty()) {
-                return ticketRepository.findByBookingId(booking.getBooking_id())
+                return ticketRepository.findByBookingId(bookingId)
                         .stream()
                         .map(this::toDto)
                         .toList();

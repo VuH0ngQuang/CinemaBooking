@@ -24,4 +24,21 @@ public interface TicketRepository extends JpaRepository<Tickets, Long> {
            "WHERE t.booking.booking_id = :bookingId AND t.seat.seat_id = :seatId")
     boolean existsByBookingIdAndSeatId(@Param("bookingId") Long bookingId,
                                        @Param("seatId") Long seatId);
+
+    @Query("""
+            SELECT DISTINCT t
+            FROM Tickets t
+            JOIN FETCH t.booking
+            JOIN FETCH t.seat
+            """)
+    List<Tickets> findAllJoinFetch();
+
+    @Query("""
+            SELECT t.seat.seat_id
+            FROM Tickets t
+            WHERE t.booking.booking_id = :bookingId
+              AND t.seat.seat_id IN :seatIds
+            """)
+    List<Long> findExistingSeatIdsByBookingIdAndSeatIdIn(@Param("bookingId") Long bookingId,
+                                                          @Param("seatIds") List<Long> seatIds);
 }

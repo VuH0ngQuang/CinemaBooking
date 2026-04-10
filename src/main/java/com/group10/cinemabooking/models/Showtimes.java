@@ -7,6 +7,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
@@ -78,12 +79,12 @@ public class Showtimes {
 
     @NotNull(message = "Screening room must not be null")
     @ToString.Exclude
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private ScreeningRooms screeningRoom;
 
     @NotNull(message = "Movie must not be null")
     @ToString.Exclude
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private Movies movie;
 
     @ToString.Exclude

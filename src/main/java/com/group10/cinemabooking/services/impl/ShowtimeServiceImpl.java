@@ -62,7 +62,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
     @Override
     public List<ShowtimeDto> getAllShowtimes() {
-        return showtimeRepository.findAll()
+        return showtimeRepository.findAllJoinFetch()
                 .stream()
                 .map(this::toDto)
                 .toList();

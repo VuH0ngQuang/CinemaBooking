@@ -3,6 +3,7 @@ package com.group10.cinemabooking.models;
 import com.group10.cinemabooking.utils.IDGenerator;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import lombok.*;
@@ -35,6 +36,6 @@ public class AuthSessions {
     private Date revoked_at;
 
     @ToString.Exclude
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private Users user;
 }

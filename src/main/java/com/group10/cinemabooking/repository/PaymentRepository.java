@@ -47,4 +47,16 @@ public interface PaymentRepository extends JpaRepository<Payments, Long> {
     @Query("SELECT COUNT(p) > 0 FROM Payments p WHERE p.booking.booking_id = :bookingId AND p.status = :status")
     boolean existsByBookingIdAndStatus(@Param("bookingId") Long bookingId,
                                        @Param("status") PaymentStatusEnum status);
+
+    @Query("""
+            SELECT DISTINCT p
+            FROM Payments p
+            JOIN FETCH p.booking b
+            JOIN FETCH b.user
+            JOIN FETCH b.showtime s
+            JOIN FETCH s.movie
+            JOIN FETCH s.screeningRoom r
+            LEFT JOIN FETCH r.cinema
+            """)
+    List<Payments> findAllJoinFetch();
 }

@@ -54,4 +54,20 @@ public interface BookingSeatRepository extends JpaRepository<BookingSeats, Long>
     boolean existsActiveSeatByShowtimeAndSeatIdExcludingBookingSeatId(@Param("showtimeId") long showtimeId,
                                                                       @Param("seatId") long seatId,
                                                                       @Param("bookingSeatId") long bookingSeatId);
+
+    @Query("""
+            SELECT DISTINCT bs
+            FROM BookingSeats bs
+            JOIN FETCH bs.booking
+            JOIN FETCH bs.seat
+            """)
+    List<BookingSeats> findAllJoinFetch();
+
+    @Query("""
+            SELECT bs
+            FROM BookingSeats bs
+            JOIN FETCH bs.seat
+            WHERE bs.booking.booking_id = :bookingId
+            """)
+    List<BookingSeats> findAllByBookingIdJoinFetchSeat(@Param("bookingId") long bookingId);
 }

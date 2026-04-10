@@ -17,12 +17,12 @@ public class BookingSeats {
     private long booking_seat_id = IDGenerator.generateBookingSeatId();
 
     @ToString.Exclude
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false)
     private Bookings booking;
 
     @ToString.Exclude
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "seat_id", nullable = false)
     private Seats seat;
 

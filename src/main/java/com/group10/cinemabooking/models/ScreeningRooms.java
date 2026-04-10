@@ -26,7 +26,7 @@ public class ScreeningRooms {
     private int amount_cols;
 
     @ToString.Exclude
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     private Cinemas cinema;
     @ToString.Exclude
     @OneToMany(mappedBy = "screeningRoom", cascade = CascadeType.ALL, orphanRemoval = true)

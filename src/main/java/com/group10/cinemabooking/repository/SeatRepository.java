@@ -26,4 +26,11 @@ public interface SeatRepository extends JpaRepository<Seats, Long> {
             WHERE s.screeningRoom.room_id = :roomId
             """)
     List<Seats> findByRoomId(@Param("roomId") long roomId);
+
+    @Query("""
+            SELECT DISTINCT s
+            FROM Seats s
+            JOIN FETCH s.screeningRoom
+            """)
+    List<Seats> findAllJoinFetch();
 }

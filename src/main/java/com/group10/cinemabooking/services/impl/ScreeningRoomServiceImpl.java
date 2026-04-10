@@ -85,7 +85,7 @@ public class ScreeningRoomServiceImpl implements ScreeningRoomService {
 
     @Override
     public List<ScreeningRoomDto> getAllScreeningRooms() {
-        return screeningRoomRepository.findAll()
+        return screeningRoomRepository.findAllJoinFetch()
                 .stream()
                 .map(this::toDto)
                 .toList();

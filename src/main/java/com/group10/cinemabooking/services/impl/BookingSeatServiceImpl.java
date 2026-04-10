@@ -145,7 +145,7 @@ public class BookingSeatServiceImpl implements BookingSeatService {
 
     @Override
     public List<BookingSeatDto> getAllBookingSeats() {
-        return bookingSeatRepository.findAll()
+        return bookingSeatRepository.findAllJoinFetch()
                 .stream()
                 .map(this::toDto)
                 .toList();

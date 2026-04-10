@@ -38,7 +38,7 @@ public class Seats {
     @OneToMany(mappedBy = "seat", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<BookingSeats> bookingSeats;
     @ToString.Exclude
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private ScreeningRooms screeningRoom;
 
 }

@@ -28,10 +28,13 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -104,7 +107,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public List<PaymentDto> getAllPayments() {
-        return paymentRepository.findAll()
+        return paymentRepository.findAllJoinFetch()
                 .stream()
                 .map(this::toDto)
                 .toList();
@@ -267,37 +270,57 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void finalizeSeatsForSuccessfulPayment(Bookings booking) {
         List<BookingSeats> bookingSeats = bookingSeatRepository.findAllByBookingId(booking.getBooking_id());
-        BoundedFlushHelper boundedFlushHelper = new BoundedFlushHelper(
-                entityManager,
-                BATCH_FLUSH_SIZE,
-                BATCH_FLUSH_INTERVAL_MS
-        );
-        for (BookingSeats bookingSeat : bookingSeats) {
-            long showtimeId = booking.getShowtime().getShowtime_id();
-            long seatId = bookingSeat.getSeat().getSeat_id();
-            String seatLockKey = "seat:showtime:lock:" + showtimeId + ":" + seatId;
-            ReentrantLock seatLock = lockManager.getLock(seatLockKey);
-            seatLock.lock();
-            try {
-                ShowTimeSeats sts = showTimeSeatRepository.findByShowtimeIdAndSeatId(showtimeId, seatId)
-                        .orElseGet(() -> ShowTimeSeats.builder()
-                                .showtime(booking.getShowtime())
-                                .seat(bookingSeat.getSeat())
-                                .build());
+        if (bookingSeats.isEmpty()) {
+            return;
+        }
+
+        long showtimeId = booking.getShowtime().getShowtime_id();
+        // Acquire all seat locks in sorted order to avoid deadlocks, then batch-fetch.
+        List<Long> sortedSeatIds = bookingSeats.stream()
+                .map(bs -> bs.getSeat().getSeat_id())
+                .sorted()
+                .toList();
+        List<ReentrantLock> seatLocks = new ArrayList<>(sortedSeatIds.size());
+        for (Long seatId : sortedSeatIds) {
+            seatLocks.add(lockManager.getLock("seat:showtime:lock:" + showtimeId + ":" + seatId));
+        }
+        seatLocks.forEach(ReentrantLock::lock);
+        try {
+            Map<Long, ShowTimeSeats> stsBySeatId = showTimeSeatRepository
+                    .findAllByShowtimeIdAndSeatIdIn(showtimeId, sortedSeatIds)
+                    .stream()
+                    .collect(Collectors.toMap(s -> s.getSeat().getSeat_id(), s -> s));
+
+            BoundedFlushHelper boundedFlushHelper = new BoundedFlushHelper(
+                    entityManager,
+                    BATCH_FLUSH_SIZE,
+                    BATCH_FLUSH_INTERVAL_MS
+            );
+            for (BookingSeats bookingSeat : bookingSeats) {
+                long seatId = bookingSeat.getSeat().getSeat_id();
+                ShowTimeSeats sts = stsBySeatId.get(seatId);
+                if (sts == null) {
+                    sts = ShowTimeSeats.builder()
+                            .showtime(booking.getShowtime())
+                            .seat(bookingSeat.getSeat())
+                            .build();
+                }
                 sts.setStatus(ShowtimeSeatsStatusEnum.BOOKED);
                 sts.setHold_token(null);
                 sts.setHold_expires_at(null);
                 showTimeSeatRepository.save(sts);
                 boundedFlushHelper.onWrite();
-            } finally {
-                seatLock.unlock();
-            }
 
-            bookingSeat.setStatus(BookingSeatStatusEnum.CONFIRMED);
-            bookingSeatRepository.save(bookingSeat);
-            boundedFlushHelper.onWrite();
+                bookingSeat.setStatus(BookingSeatStatusEnum.CONFIRMED);
+                bookingSeatRepository.save(bookingSeat);
+                boundedFlushHelper.onWrite();
+            }
+            boundedFlushHelper.forceFlush();
+        } finally {
+            for (int i = seatLocks.size() - 1; i >= 0; i--) {
+                seatLocks.get(i).unlock();
+            }
         }
-        boundedFlushHelper.forceFlush();
     }
 
     private void validateCreateRequest(PaymentRequestDto requestDto) {

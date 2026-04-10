@@ -70,7 +70,7 @@ public class SeatServiceImpl implements SeatService {
 
     @Override
     public List<SeatDto> getAllSeats() {
-        return seatRepository.findAll()
+        return seatRepository.findAllJoinFetch()
                 .stream()
                 .map(this::toDto)
                 .toList();

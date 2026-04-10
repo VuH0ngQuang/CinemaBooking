@@ -47,4 +47,27 @@ public interface BookingRepository extends JpaRepository<Bookings, Long> {
             WHERE b.booking_code = :bookingCode
             """)
     Optional<Bookings> findByBookingCodeForUpdate(@Param("bookingCode") String bookingCode);
+
+    @Query("""
+            SELECT DISTINCT b
+            FROM Bookings b
+            JOIN FETCH b.user
+            JOIN FETCH b.showtime s
+            JOIN FETCH s.movie
+            JOIN FETCH s.screeningRoom r
+            LEFT JOIN FETCH r.cinema
+            """)
+    List<Bookings> findAllJoinFetch();
+
+    @Query("""
+            SELECT b
+            FROM Bookings b
+            JOIN FETCH b.user
+            JOIN FETCH b.showtime s
+            JOIN FETCH s.movie
+            JOIN FETCH s.screeningRoom r
+            LEFT JOIN FETCH r.cinema
+            WHERE b.booking_id = :bookingId
+            """)
+    Optional<Bookings> findByIdWithDetails(@Param("bookingId") Long bookingId);
 }
