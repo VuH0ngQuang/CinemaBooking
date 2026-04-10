@@ -53,7 +53,7 @@ public class BookingServiceImpl implements BookingService {
         ReentrantLock lock = lockManager.getLock(lockKey);
         lock.lock();
         try {
-            Users user = userRepository.findById(requestDto.getUserId())
+            Users user = userRepository.findActiveById(requestDto.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "User not found with id: " + requestDto.getUserId()
                     ));
@@ -98,7 +98,7 @@ public class BookingServiceImpl implements BookingService {
 
         seatLocks.forEach(ReentrantLock::lock);
         try {
-            Users user = userRepository.findById(requestDto.getUserId())
+            Users user = userRepository.findActiveById(requestDto.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "User not found with id: " + requestDto.getUserId()
                     ));
@@ -212,7 +212,7 @@ public class BookingServiceImpl implements BookingService {
                 );
             }
 
-            Users user = userRepository.findById(requestDto.getUserId())
+            Users user = userRepository.findActiveById(requestDto.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "User not found with id: " + requestDto.getUserId()
                     ));

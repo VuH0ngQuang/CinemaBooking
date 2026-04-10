@@ -27,4 +27,5 @@ public class UserDto {
     private UserStatusEnum status;
     private UserRoleEnum role;
     private String full_name;
+    private boolean is_deleted;
 }

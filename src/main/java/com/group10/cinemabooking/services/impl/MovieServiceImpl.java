@@ -70,7 +70,7 @@ public class MovieServiceImpl implements MovieService {
                     .orElseThrow(() -> new ResourceNotFoundException("Movie not found with id: " + key));
         });
 
-        log.info("RETURN MOVIE movieId={}", movieId);
+//        log.info("RETURN MOVIE movieId={}", movieId);
 
         return toDto(movie);
     }

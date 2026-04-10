@@ -29,6 +29,7 @@ public class MailServiceImpl implements MailService {
                                   String templateName,
                                   Map<String, Object> variables
     ) {
+        if (to == null || to.isEmpty() || to.equals("test@test.com")) {return;}
         Context context = new Context();
         if (variables != null) {
             variables.forEach(context::setVariable);

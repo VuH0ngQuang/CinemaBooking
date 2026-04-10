@@ -86,19 +86,21 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Users getUserById(Long id) {
-        return userCache.getOrLoad(id, key ->
-                userRepository.findById(key)
+        Users user = userCache.getOrLoad(id, key ->
+                userRepository.findActiveById(key)
                         .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + key))
         );
+        if (user.is_deleted()) {
+            userCache.remove(id);
+            throw new ResourceNotFoundException("User not found with id: " + id);
+        }
+        return user;
     }
 
     @Override
     @Transactional
     public UserDto updateUser(Long id, UserDto userDto) {
-        Users user = userCache.getOrLoad(id, key ->
-                userRepository.findById(key)
-                        .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + key))
-        );
+        Users user = getUserById(id);
         ReentrantLock lock = lockManager.getLock("user:update:" + id);
         lock.lock();
         try {
@@ -126,17 +128,60 @@ public class UserServiceImpl implements UserService {
         try {
             Users user = userRepository.findById(id)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+            if (user.is_deleted()) {
+                throw new InvalidRequestException("User already deleted: " + id);
+            }
+            user.set_deleted(true);
+            user.setUpdated_at(new Date());
+            userRepository.save(user);
             if (userCache.contains(id)) userCache.remove(id);
             if (user.getEmail() != null) {
                 emailCache.remove(user.getEmail());
             }
-            userRepository.deleteById(id);
         } catch (Exception e) {
             log.error("Error deleting user with id {}: {}", id, e.getMessage());
             throw e;
         } finally {
             lock.unlock();
         }
+    }
+
+    @Override
+    @Transactional
+    public UserDto restoreUser(Long id) {
+        ReentrantLock lock = lockManager.getLock("user:restore:" + id);
+        lock.lock();
+        try {
+            Users user = userRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+            if (!user.is_deleted()) {
+                throw new InvalidRequestException("User is not deleted: " + id);
+            }
+            user.set_deleted(false);
+            user.setUpdated_at(new Date());
+            saveUser(user);
+            return toDto(user);
+        } catch (Exception e) {
+            log.error("Error restoring user with id {}: {}", id, e.getMessage());
+            throw e;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public List<UserDto> getAllUsers() {
+        return userRepository.findAllActive().stream().map(this::toDto).toList();
+    }
+
+    @Override
+    public UserDto getUserDtoById(Long id) {
+        return toDto(getUserById(id));
+    }
+
+    @Override
+    public UserDto getUserDtoByEmail(String email) {
+        return toDto(getUserByEmail(email));
     }
 
     @Override
@@ -183,6 +228,7 @@ public class UserServiceImpl implements UserService {
         dto.setFull_name(user.getFull_name());
         dto.setStatus(user.getStatus());
         dto.setRole(user.getRole());
+        dto.set_deleted(user.is_deleted());
         return dto;
     }
 }

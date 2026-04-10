@@ -1,5 +1,6 @@
 package com.group10.cinemabooking.filter;
 
+import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.services.JwtService;
 import com.group10.cinemabooking.services.UserService;
 import com.group10.cinemabooking.utils.InAppCache;
@@ -53,7 +54,15 @@ public class JwtAuthFilter  extends OncePerRequestFilter {
             String email = jwtService.extractEmail(token);
 
             if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                var user = userService.getUserByEmail(email);
+                com.group10.cinemabooking.models.Users user;
+                try {
+                    user = userService.getUserByEmail(email);
+                } catch (ResourceNotFoundException ex) {
+                    // user has been deleted (soft) - drop the token and proceed unauthenticated
+                    tokenCache.remove(token);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
                 if (user != null && jwtService.validateToken(token, user)) {
                     List<GrantedAuthority> authorities =
                             List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));

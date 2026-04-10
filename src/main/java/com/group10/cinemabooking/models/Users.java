@@ -39,6 +39,9 @@ public class Users {
     @NonNull
     @Column(nullable = false)
     private String password;
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean is_deleted = false;
 
     @ToString.Exclude
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.security.Key;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -42,7 +43,28 @@ public class JwtServiceImpl implements JwtService {
     }
 
     private Key getSigningKey() {
-        byte[] keyBytes = HexFormat.of().parseHex(appConf.getJwt().getSecret());
+        String rawSecret = appConf.getJwt().getSecret();
+        if (rawSecret == null || rawSecret.isBlank()) {
+            throw new IllegalStateException("JWT secret is missing");
+        }
+
+        String secret = rawSecret.trim();
+        if (secret.startsWith("0x") || secret.startsWith("0X")) {
+            secret = secret.substring(2);
+        }
+
+        byte[] keyBytes;
+        boolean isHex = secret.matches("^[0-9a-fA-F]+$") && (secret.length() % 2 == 0);
+        if (isHex) {
+            keyBytes = HexFormat.of().parseHex(secret);
+        } else {
+            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        }
+
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("JWT secret must be at least 32 bytes for HS256");
+        }
+
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
