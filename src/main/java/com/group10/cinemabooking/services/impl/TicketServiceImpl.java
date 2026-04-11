@@ -1,6 +1,5 @@
 package com.group10.cinemabooking.services.impl;
 
-import com.group10.cinemabooking.configurations.AppConf;
 import com.group10.cinemabooking.dtos.BookingValidationRequestDto;
 import com.group10.cinemabooking.dtos.BookingValidationResponseDto;
 import com.group10.cinemabooking.dtos.TicketDto;
@@ -15,22 +14,19 @@ import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.BookingRepository;
 import com.group10.cinemabooking.repository.PaymentRepository;
 import com.group10.cinemabooking.repository.TicketRepository;
-import com.group10.cinemabooking.services.MailService;
 import com.group10.cinemabooking.services.TicketService;
+import com.group10.cinemabooking.services.events.BookingConfirmationEmailEvent;
 import com.group10.cinemabooking.utils.BoundedFlushHelper;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,8 +41,7 @@ public class TicketServiceImpl implements TicketService {
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Tickets> ticketCache;
     private final EntityManager entityManager;
-    private final MailService mailService;
-    private final AppConf appConf;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public List<TicketDto> getAllTickets() {
@@ -153,7 +148,10 @@ public class TicketServiceImpl implements TicketService {
                         .map(this::toDto)
                         .toList();
             }
-            registerBookingConfirmationEmailAfterCommit(booking, bookingSeats, generatedTickets);
+            if (booking.getUser() == null || booking.getUser().getEmail() == null) {
+                throw new InvalidRequestException("Booking or User email must not be null");
+            }
+            eventPublisher.publishEvent(new BookingConfirmationEmailEvent(booking.getBooking_id()));
             return generatedTickets;
         } finally {
             lock.unlock();
@@ -344,64 +342,4 @@ public class TicketServiceImpl implements TicketService {
         }
     }
 
-    private void registerBookingConfirmationEmailAfterCommit(
-            Bookings booking,
-            List<BookingSeats> bookingSeats,
-            List<TicketDto> tickets
-    ) {
-        if (booking == null || booking.getUser() == null || booking.getUser().getEmail() == null) {
-            throw new InvalidRequestException("Booking or User must not be null");
-        }
-        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            sendBookingConfirmationEmail(booking, tickets, bookingSeats);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                sendBookingConfirmationEmail(booking, tickets, bookingSeats);
-            }
-        });
-    }
-
-    private void sendBookingConfirmationEmail(
-            Bookings booking,
-            List<TicketDto> tickets,
-            List<BookingSeats> bookingSeats
-    ) {
-        if (tickets == null || tickets.isEmpty()) return;
-        Showtimes showtime = booking.getShowtime();
-        if (showtime == null || showtime.getMovie() == null || showtime.getScreeningRoom() == null) return;
-        ScreeningRooms room = showtime.getScreeningRoom();
-        Cinemas cinema = room.getCinema();
-        String bookingCode = (booking.getBooking_code() == null || booking.getBooking_code().isBlank())
-                ? "BOOKING-" + booking.getBooking_id()
-                : booking.getBooking_code();
-        String seatNumbers = bookingSeats
-                .stream()
-                .map(bs -> String.valueOf(bs.getSeat().getSeat_label()) + bs.getSeat().getSeat_col())
-                .sorted()
-                .collect(Collectors.joining(", "));
-        String qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + bookingCode;
-        String showDateTime = new SimpleDateFormat("dd/MM/yyyy HH:mm").format(showtime.getStart_time());
-        String totalAmount = String.format("%,d VNĐ", booking.getTotal_price());
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("username", booking.getUser().getFull_name());
-        vars.put("movieName", showtime.getMovie().getTitle());
-        vars.put("showDateTime", showDateTime);
-        vars.put("screenRoom", room.getRoom_name());
-        vars.put("seatNumbers", seatNumbers);
-        vars.put("ticketCode", bookingCode);
-        vars.put("qrCodeUrl", qrCodeUrl);
-        vars.put("cinemaName", cinema != null ? cinema.getName() : "Cinema");
-        vars.put("cinemaAddress", cinema != null ? cinema.getAddress() : "");
-        vars.put("totalAmount", totalAmount);
-        vars.put("myBookingsUrl", appConf.getAppDomain() + "/my-bookings");
-        mailService.sendTemplateEmail(
-                booking.getUser().getEmail(),
-                "Your booking is confirmed",
-                "booking-confirmation",
-                vars
-        );
-    }
 }
