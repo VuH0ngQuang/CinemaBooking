@@ -41,3 +41,17 @@ GEMINI.md
 .claude
 .cursor
 .gemini
+# ===== Backend Extra =====
+*.log
+.env.*
+ 
+# ===== Frontend (React/Vite) ===== 
+frontend/node_modules/ 
+frontend/dist/ 
+frontend/.vite/ 
+frontend/.env 
+frontend/.env.* 
+frontend/npm-debug.log* 
+frontend/yarn-debug.log* 
+frontend/yarn-error.log* 
+frontend/pnpm-debug.log* 
