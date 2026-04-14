@@ -15,6 +15,15 @@ import Dashboard from './pages/admin/Dashboard.jsx'
 import AddShow from './pages/admin/AddShow.jsx'
 import ListShow from './pages/admin/ListShow.jsx'
 import ListBooking from './pages/admin/ListBooking.jsx'
+import {
+  BookingSeatManagement,
+  CinemaManagement,
+  ScreeningRoomManagement,
+  TicketOperations,
+  UserManagement,
+} from './pages/admin/ManagementPages.jsx'
+import QrScanner from './pages/admin/QrScanner.jsx'
+import AddMovie from './pages/admin/AddMovie.jsx'
 
 
 const App = () => {
@@ -38,6 +47,13 @@ const App = () => {
           <Route path='add-shows' element={<AddShow/>}/>
           <Route path='list-shows' element={<ListShow/>}/>
           <Route path='list-bookings' element={<ListBooking/>}/>
+          <Route path='users' element={<UserManagement/>}/>
+          <Route path='cinemas' element={<CinemaManagement/>}/>
+          <Route path='screening-rooms' element={<ScreeningRoomManagement/>}/>
+          <Route path='booking-seats' element={<BookingSeatManagement/>}/>
+          <Route path='tickets' element={<TicketOperations/>}/>
+          <Route path='qr-scanner' element={<QrScanner/>}/>
+          <Route path='add-movie' element={<AddMovie/>}/>
 
         </Route>
       </Routes>

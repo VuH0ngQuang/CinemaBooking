@@ -6,7 +6,7 @@ const AdminNavbar = () => {
   return (
     <div>
         <Link to="/">
-            <img src={assets.logo} alt="logo" className='w-36 h-auto'/>
+            <img src={assets.logo} alt="logo" className='w-36 h-auto p-5'/>
         </Link>
     </div>
   )

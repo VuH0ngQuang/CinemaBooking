@@ -1,10 +1,17 @@
 import React from 'react'
 import { assets } from '../../assets/assets'
 import {
+  ArmchairIcon,
+  Building2Icon,
+  ClapperboardIcon,
+  FilmIcon,
   LayoutDashboardIcon,
   ListCollapseIcon,
   ListIcon,
-  PlusSquareIcon
+  PlusSquareIcon,
+  ScanQrCodeIcon,
+  TicketIcon,
+  UsersIcon,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 
@@ -21,6 +28,13 @@ const AdminSidebar = () => {
     { name: 'Add Shows', path: '/admin/add-shows', icon: PlusSquareIcon },
     { name: 'List Shows', path: '/admin/list-shows', icon: ListIcon },
     { name: 'List Bookings', path: '/admin/list-bookings', icon: ListCollapseIcon },
+    { name: 'Users', path: '/admin/users', icon: UsersIcon },
+    { name: 'Cinemas', path: '/admin/cinemas', icon: Building2Icon },
+    { name: 'Screening Rooms', path: '/admin/screening-rooms', icon: ClapperboardIcon },
+    { name: 'Booking Seats', path: '/admin/booking-seats', icon: ArmchairIcon },
+    { name: 'Tickets', path: '/admin/tickets', icon: TicketIcon },
+    { name: 'QR Scanner', path: '/admin/qr-scanner', icon: ScanQrCodeIcon },
+    { name: 'Add Movie', path: '/admin/add-movie', icon: FilmIcon },
   ]
 
   return (
