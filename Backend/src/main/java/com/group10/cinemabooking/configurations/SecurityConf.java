@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,9 +18,17 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @EnableWebSecurity
 @Configuration
@@ -28,17 +37,26 @@ public class SecurityConf {
     public static final Logger log = LoggerFactory.getLogger(SecurityConf.class);
     public final JwtAuthFilter jwtAuthFilter;
     public final UserService userService;
+    private final String corsAllowedOrigins;
+    private final boolean corsAllowAll;
 
     @Autowired
-    public SecurityConf(JwtAuthFilter jwtAuthFilter, UserService userService) {
+    public SecurityConf(
+            JwtAuthFilter jwtAuthFilter,
+            UserService userService,
+            @Value("${app.cors.allowed-origins:http://localhost:5173}") String corsAllowedOrigins,
+            @Value("${app.cors.allow-all:false}") boolean corsAllowAll) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.userService = userService;
+        this.corsAllowedOrigins = corsAllowedOrigins;
+        this.corsAllowAll = corsAllowAll;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, PasswordEncoder passwordEncoder) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
@@ -73,6 +91,30 @@ public class SecurityConf {
                         })
                 );
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        if (corsAllowAll) {
+            configuration.setAllowedOriginPatterns(List.of("*"));
+        } else {
+            List<String> origins = Arrays.stream(corsAllowedOrigins.split(","))
+                    .map(String::trim)
+                    .filter(origin -> !origin.isEmpty())
+                    .collect(Collectors.toList());
+            configuration.setAllowedOrigins(origins);
+        }
+
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("*"));
+        configuration.setAllowCredentials(false);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     @Bean

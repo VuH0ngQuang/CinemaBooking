@@ -1,11 +1,14 @@
 package com.group10.cinemabooking.services.impl;
 
+import com.group10.cinemabooking.dtos.ImgUrlDto;
 import com.group10.cinemabooking.dtos.MovieDto;
 import com.group10.cinemabooking.models.Movies;
 import com.group10.cinemabooking.repository.MovieRepository;
+import com.group10.cinemabooking.services.MinioService;
 import com.group10.cinemabooking.services.MovieService;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,6 +20,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class MovieServiceImpl implements MovieService {
 
     private static final Logger log = LoggerFactory.getLogger(MovieServiceImpl.class);
@@ -24,18 +28,11 @@ public class MovieServiceImpl implements MovieService {
     private final MovieRepository movieRepository;
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Movies> movieCache;
-
-    public MovieServiceImpl(MovieRepository movieRepository,
-                        LockManager<String> lockManager,
-                        InAppCache<Long, Movies> movieCache) {
-        this.movieRepository = movieRepository;
-        this.lockManager = lockManager;
-        this.movieCache = movieCache;
-    }
+    private final MinioService minioService;
 
     @Override
     @Transactional
-    public MovieDto createMovie(MovieDto movieDto) {
+    public ImgUrlDto createMovie(MovieDto movieDto) {
         Movies movie = new Movies();
         String lockKey = "movie:create:" + (movieDto != null && movieDto.getTitle() != null
                 ? movieDto.getTitle().trim().toLowerCase()
@@ -45,7 +42,7 @@ public class MovieServiceImpl implements MovieService {
         try {
             updateFromDto(movie, movieDto);
             saveMovie(movie);
-            return toDto(movie);
+            return minioService.uploadImage(movie.getMovie_id());
         } catch (Exception e) {
             log.error("Error creating movie: {}", e.getMessage());
             throw e;
@@ -132,6 +129,7 @@ public class MovieServiceImpl implements MovieService {
         dto.setTitle(movie.getTitle());
         dto.setStatus(movie.getStatus());
         dto.setDescription(movie.getDescription());
+        dto.setTrailerUrl(movie.getTrailerUrl());
         dto.setGenre(movie.getGenre());
         dto.setDuration_minutes(movie.getDuration_minutes());
 
@@ -158,6 +156,10 @@ public class MovieServiceImpl implements MovieService {
 
         if (dto.getDescription() != null && !dto.getDescription().isBlank()) {
             movie.setDescription(dto.getDescription());
+        }
+
+        if (dto.getTrailerUrl() != null && !dto.getTrailerUrl().isBlank()) {
+            movie.setTrailerUrl(dto.getTrailerUrl());
         }
 
         if (dto.getGenre() != null) {

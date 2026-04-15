@@ -103,7 +103,8 @@ public class BusinessFlowOneTimeRunner implements CommandLineRunner {
             movie.setStatus(MovieStatusEnum.NOW_SHOWING);
             movie.setDuration_minutes(120);
             movie.setRelease_date(new Date(System.currentTimeMillis() - 86_400_000L));
-            MovieDto createdMovie = movieService.createMovie(movie);
+            movieService.createMovie(movie);
+            MovieDto createdMovie = movieService.getMovieById(movie.getMovie_id());
             log.info("Created movie id={}", createdMovie.getMovie_id());
 
             Date start = new Date(System.currentTimeMillis() + 3_600_000L);

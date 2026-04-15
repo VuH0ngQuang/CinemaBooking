@@ -1,5 +1,7 @@
 package com.group10.cinemabooking.services;
 
+import com.group10.cinemabooking.dtos.ImgUrlDto;
+
 public interface MinioService {
-    String uploadImage(String id);
+    ImgUrlDto uploadImage(Long id);
 }

@@ -71,6 +71,10 @@ public class Movies {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
+    @NotBlank(message = "Trailer must not be null")
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String trailerUrl;
+
     @NotNull(message = "Genre must not be null")
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)

@@ -1,5 +1,6 @@
 package com.group10.cinemabooking.controller;
 
+import com.group10.cinemabooking.dtos.ImgUrlDto;
 import com.group10.cinemabooking.dtos.MovieDto;
 import com.group10.cinemabooking.services.MovieService;
 import org.springframework.http.HttpStatus;
@@ -20,9 +21,9 @@ public class MoviesController {
     }
 
     @PostMapping
-    public ResponseEntity<MovieDto> createMovie(@Valid @RequestBody MovieDto movieDto) {
-        MovieDto createdMovie = movieService.createMovie(movieDto);
-        return new ResponseEntity<>(createdMovie, HttpStatus.CREATED);
+    public ResponseEntity<ImgUrlDto> createMovie(@Valid @RequestBody MovieDto movieDto) {
+        ImgUrlDto imgUrlDto = movieService.createMovie(movieDto);
+        return new ResponseEntity<>(imgUrlDto, HttpStatus.CREATED);
     }
 
     @GetMapping

@@ -1,5 +1,7 @@
 package com.group10.cinemabooking.services.impl;
 
+import com.group10.cinemabooking.dtos.ImgUrlDto;
+import io.minio.Http;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,9 +12,11 @@ import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.services.MinioService;
 
 import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.Http.Method;
 import io.minio.errors.MinioException;
 import io.minio.MinioClient;
+
+import java.lang.reflect.Method;
+import java.util.Map;
 
 @Service
 public class MinioServiceImpl implements MinioService {
@@ -27,22 +31,39 @@ public class MinioServiceImpl implements MinioService {
     }
 
     @Override
-    public String uploadImage(String id) {
-        if (id == null || id.isBlank()) {
-            throw new InvalidRequestException("Image id must not be blank");
+    public ImgUrlDto uploadImage(Long id) {
+        if (id == null) {
+            throw new InvalidRequestException("Image id must not be null");
         }
         try {
-            return minioClient.getPresignedObjectUrl(
-                GetPresignedObjectUrlArgs.builder()
-                .method(Method.PUT)
-                .bucket(appConf.getMinio().getBucket())
-                .object("poster/"+id+".jpg")
-                .expiry(60 * 10) // 10 minutes
-                .build());
+            String bucket = appConf.getMinio().getBucket();
+
+            String horizontalUrl = minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Http.Method.PUT)
+                            .bucket(bucket)
+                            .object("poster/horizontal/" + id + ".jpg")
+                            .expiry(60 * 10)
+                            .build()
+            );
+
+            String verticalUrl = minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Http.Method.PUT)
+                            .bucket(bucket)
+                            .object("poster/vertical/" + id + ".jpg")
+                            .expiry(60 * 10)
+                            .build()
+            );
+
+            return ImgUrlDto.builder()
+                    .horizontal(horizontalUrl)
+                    .vertical(verticalUrl)
+                    .build();
         } catch (MinioException e) {
-            log.error("Error uploading image to Minio: {}", e.getMessage());
+            log.error("Error generating image upload URLs: {}", e.getMessage());
             log.error("HTTP Trace: {}", e.httpTrace());
-            throw new RuntimeException("Failed to generate Minio upload URL", e);
+            throw new RuntimeException("Failed to generate Minio upload URLs", e);
         }
     }
 }

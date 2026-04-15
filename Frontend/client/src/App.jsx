@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import Navbar from './components/Navbar.jsx'
 import {Routes, Route, useLocation} from 'react-router-dom'
 import Movies from './pages/Movies.jsx'
@@ -29,6 +29,32 @@ import AddMovie from './pages/admin/AddMovie.jsx'
 const App = () => {
 
   const isAdminRoute = useLocation().pathname.startsWith('/admin')
+  const baseUrl = import.meta.env.VITE_BASE_URL
+
+  useEffect(() => {
+    if (!baseUrl) {
+      console.warn('VITE_BASE_URL is not defined in .env')
+      return
+    }
+
+    const moviesEndpoint = `${baseUrl.replace(/\/$/, '')}/api/movies`
+
+    const fetchMovies = async () => {
+      try {
+        const response = await fetch(moviesEndpoint)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch movies: ${response.status}`)
+        }
+
+        const movies = await response.json()
+        localStorage.setItem('movies', JSON.stringify(movies))
+      } catch (error) {
+        console.error('Error fetching movies:', error)
+      }
+    }
+
+    fetchMovies()
+  }, [baseUrl])
 
   return (
     <>

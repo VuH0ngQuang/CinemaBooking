@@ -21,6 +21,7 @@ public class MovieDto {
     private String title;
     private MovieStatusEnum status;
     private String description;
+    private String trailerUrl;
     private MovieGenreEnum genre;
     private int duration_minutes;
 }

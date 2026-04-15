@@ -1,12 +1,13 @@
 package com.group10.cinemabooking.services;
 
+import com.group10.cinemabooking.dtos.ImgUrlDto;
 import com.group10.cinemabooking.dtos.MovieDto;
 
 import java.util.List;
 
 public interface MovieService {
 
-    MovieDto createMovie(MovieDto movieDto);
+    ImgUrlDto createMovie(MovieDto movieDto);
 
     List<MovieDto> getAllMovies();
 
