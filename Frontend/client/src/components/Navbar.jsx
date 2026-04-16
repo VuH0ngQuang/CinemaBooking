@@ -4,14 +4,28 @@ import { assets } from '../assets/assets'
 import { MenuIcon, SearchIcon, XIcon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import AuthModal from './AuthModal'
+import { logoutRequest } from '../lib/authApi'
 
 const Navbar = () => {
 
   const [isOpen, setIsOpen] = useState(false)
   const [isAuthOpen, setIsAuthOpen] = useState(false)
 
-  const { user, logout } = useAuth()
+  const { user, logout, token } = useAuth()
   const navigate = useNavigate()
+
+  const handleLogout = async () => {
+    try {
+      if (token) {
+        await logoutRequest(token)
+      }
+    } catch (error) {
+      console.error("Logout request failed:", error)
+    } finally {
+      logout()
+      navigate("/")
+    }
+  }
 
   return (
     <div className='fixed top-0 left-0 z-50 w-full flex items-center
@@ -51,10 +65,7 @@ const Navbar = () => {
           <div className="flex items-center gap-4">
             <span className="text-white">{user.name}</span>
             <button
-              onClick={() => {
-                logout()
-                navigate("/")
-              }}
+              onClick={handleLogout}
               className="px-4 py-1 sm:px-7 sm:py-2 bg-primary rounded-full cursor-pointer"
             >
               Logout
@@ -68,7 +79,6 @@ const Navbar = () => {
         onClick={() => setIsOpen(true)}
       />
 
-      {/* AUTH MODAL */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}

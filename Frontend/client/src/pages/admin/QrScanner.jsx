@@ -2,16 +2,19 @@ import React, { useEffect, useRef, useState } from 'react'
 import { CameraIcon, CameraOffIcon, QrCodeIcon } from 'lucide-react'
 import jsQR from 'jsqr'
 import Title from '../../components/admin/Title'
+import { validateTicketByCode } from '../../lib/ticketApi'
+import { useAuth } from '../../context/AuthContext'
 
 const ticketFields = [
-  'ticket_id',
-  'ticket_code',
-  'booking_id',
-  'seat_id',
-  'issued_at',
-  'valid_until',
-  'used_at',
-  'status',
+  ['ticketId', 'ticket_id'],
+  ['ticketCode', 'ticket_code'],
+  ['bookingId', 'booking_id'],
+  ['seatId', 'seat_id'],
+  ['seatNumber', 'seat_number'],
+  ['issuedAt', 'issued_at'],
+  ['validUntil', 'valid_until'],
+  ['usedAt', 'used_at'],
+  ['status', 'status'],
 ]
 
 const getDisplayValue = (value) => {
@@ -25,15 +28,21 @@ const QrScanner = () => {
   const detectorRef = useRef(null)
   const canvasRef = useRef(null)
   const frameRef = useRef(null)
+  const lastValidatedRef = useRef('')
+
+  const { token } = useAuth()
 
   const [isScanning, setIsScanning] = useState(false)
   const [scanResult, setScanResult] = useState('')
   const [ticketData, setTicketData] = useState(null)
+  const [validationMessage, setValidationMessage] = useState('')
+  const [validationSuccess, setValidationSuccess] = useState(null)
   const [error, setError] = useState('')
   const [decoderName, setDecoderName] = useState('BarcodeDetector')
   const [cameraStatus, setCameraStatus] = useState('Idle')
   const [cameraDevices, setCameraDevices] = useState([])
   const [selectedDeviceId, setSelectedDeviceId] = useState('')
+  const [isValidating, setIsValidating] = useState(false)
 
   const parseTicketData = (rawValue) => {
     try {
@@ -43,6 +52,15 @@ const QrScanner = () => {
     } catch {
       return null
     }
+  }
+
+  const extractTicketCode = (rawValue) => {
+    const parsed = parseTicketData(rawValue)
+
+    if (parsed?.ticket_code) return parsed.ticket_code
+    if (parsed?.ticketCode) return parsed.ticketCode
+
+    return rawValue?.trim() || ''
   }
 
   const stopScan = () => {
@@ -70,6 +88,48 @@ const QrScanner = () => {
       }
     } catch {
       setCameraDevices([])
+    }
+  }
+
+  const handleValidation = async (rawValue) => {
+    const ticketCode = extractTicketCode(rawValue)
+
+    if (!ticketCode) {
+      setError('QR code does not contain a valid ticket code.')
+      setValidationMessage('')
+      setValidationSuccess(false)
+      setTicketData(null)
+      return
+    }
+
+    if (lastValidatedRef.current === ticketCode) {
+      return
+    }
+
+    lastValidatedRef.current = ticketCode
+    setIsValidating(true)
+    setError('')
+    setValidationMessage('Validating ticket...')
+    setValidationSuccess(null)
+
+    try {
+      const response = await validateTicketByCode(ticketCode, token)
+
+      setValidationMessage(response.message || 'Validation completed.')
+      setValidationSuccess(Boolean(response.success))
+      setTicketData(response.ticket || null)
+
+      if (!response.success && !response.ticket) {
+        setError(response.message || 'Ticket is invalid.')
+      }
+    } catch (validationError) {
+      lastValidatedRef.current = ''
+      setValidationMessage('')
+      setValidationSuccess(false)
+      setTicketData(null)
+      setError(validationError.message || 'Unable to validate ticket.')
+    } finally {
+      setIsValidating(false)
     }
   }
 
@@ -103,9 +163,9 @@ const QrScanner = () => {
 
       if (rawValue) {
         setScanResult(rawValue)
-        setTicketData(parseTicketData(rawValue))
+        await handleValidation(rawValue)
       }
-    } catch (scanError) {
+    } catch {
       setError('Unable to decode QR in current frame.')
     } finally {
       if (isScanning) {
@@ -118,7 +178,10 @@ const QrScanner = () => {
     setError('')
     setScanResult('')
     setTicketData(null)
+    setValidationMessage('')
+    setValidationSuccess(null)
     detectorRef.current = null
+    lastValidatedRef.current = ''
     setDecoderName('jsQR')
     setCameraStatus('Requesting camera access...')
 
@@ -140,7 +203,7 @@ const QrScanner = () => {
             audio: false,
           })
           break
-        } catch (streamError) {
+        } catch {
           // Try the next fallback constraint.
         }
       }
@@ -165,7 +228,7 @@ const QrScanner = () => {
 
       setIsScanning(true)
       setCameraStatus('Camera is live. Point to a QR code.')
-    } catch (cameraError) {
+    } catch {
       setError('Cannot access camera. Please check browser permission and try again.')
       setCameraStatus('Camera is unavailable.')
     }
@@ -227,6 +290,7 @@ const QrScanner = () => {
               )}
             </div>
           </div>
+
           <div className='mb-3'>
             <label className='block text-xs text-gray-400 mb-1'>Camera device</label>
             <select
@@ -246,6 +310,7 @@ const QrScanner = () => {
               )}
             </select>
           </div>
+
           <p className='text-xs text-gray-400 mb-3'>{cameraStatus}</p>
 
           <div className='rounded-lg overflow-hidden border border-white/10 bg-black/40 aspect-video'>
@@ -260,12 +325,29 @@ const QrScanner = () => {
             <h2 className='font-medium'>Ticket summary</h2>
           </div>
 
+          {validationMessage && (
+            <div
+              className={`mb-3 rounded-md border p-3 text-sm ${
+                validationSuccess === true
+                  ? 'border-green-500/30 bg-green-500/10 text-green-300'
+                  : validationSuccess === false
+                  ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                  : 'border-white/10 bg-black/30 text-gray-300'
+              }`}
+            >
+              {validationMessage}
+            </div>
+          )}
+
           {ticketData ? (
             <div className='rounded-md border border-white/10 bg-black/30 p-3 text-sm space-y-2'>
-              {ticketFields.map((field) => (
-                <div key={field} className='flex items-start justify-between gap-3 border-b border-white/10 pb-2 last:border-b-0 last:pb-0'>
-                  <span className='text-gray-400'>{field}</span>
-                  <span className='text-right break-all'>{getDisplayValue(ticketData[field])}</span>
+              {ticketFields.map(([fieldKey, fieldLabel]) => (
+                <div
+                  key={fieldKey}
+                  className='flex items-start justify-between gap-3 border-b border-white/10 pb-2 last:border-b-0 last:pb-0'
+                >
+                  <span className='text-gray-400'>{fieldLabel}</span>
+                  <span className='text-right break-all'>{getDisplayValue(ticketData[fieldKey])}</span>
                 </div>
               ))}
             </div>
@@ -275,14 +357,14 @@ const QrScanner = () => {
             </div>
           )}
 
-          <p className='text-xs text-gray-400 mt-3'>
-            Expected QR payload (JSON): ticket fields from `Tickets.java`.
-          </p>
+          {isValidating && (
+            <p className='text-xs text-gray-400 mt-3'>Checking ticket with backend...</p>
+          )}
 
           {error && <p className='text-sm text-red-400 mt-3'>{error}</p>}
 
           <p className='text-xs text-gray-400 mt-3'>
-            Static flow only: scan and display ticket data for staff check-in, no API call yet.
+            Live flow: scan QR, extract ticket code, validate via backend API.
           </p>
         </div>
       </div>

@@ -49,4 +49,4 @@ app:
 
     cors:
       allow-all: ${CORS_ALLOW_ALL:false}
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://103.162.20.119:5173}
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}

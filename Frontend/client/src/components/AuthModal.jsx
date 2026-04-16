@@ -1,29 +1,87 @@
 import { useState } from "react"
 import { XIcon } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
+import {
+  getUserByEmail,
+  loginWithEmailPassword,
+  registerUser,
+} from "../lib/authApi"
 
 const AuthModal = ({ isOpen, onClose }) => {
   const [mode, setMode] = useState("login")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [error, setError] = useState("")
+  const [successMessage, setSuccessMessage] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   const { login } = useAuth()
 
   if (!isOpen) return null
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
-    login(
-      { id: 1, name: "Quan", email: "quan@gmail.com" },
-      "fake-jwt-token"
-    )
-    onClose()
+    setError("")
+    setSuccessMessage("")
+
+    if (!email || !password) {
+      setError("Please enter both email and password.")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+
+      const token = await loginWithEmailPassword({ email, password })
+      const userResponse = await getUserByEmail(email, token)
+
+      const normalizedUser = {
+        id: userResponse.user_id,
+        name: userResponse.full_name || userResponse.email,
+        email: userResponse.email,
+        role: userResponse.role,
+        status: userResponse.status,
+        full_name: userResponse.full_name,
+        user_id: userResponse.user_id,
+      }
+
+      login(normalizedUser, token)
+      onClose()
+    } catch (err) {
+      setError(err.message || "Login failed.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const handleSignup = (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault()
-    login(
-      { id: 2, name: "New User", email: "new@gmail.com" },
-      "fake-jwt-token"
-    )
-    onClose()
+    setError("")
+    setSuccessMessage("")
+
+    if (!fullName || !email || !password) {
+      setError("Please fill in all fields.")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+
+      await registerUser({
+        email,
+        password,
+        full_name: fullName,
+      })
+
+      setSuccessMessage("Account created successfully. Please log in.")
+      setMode("login")
+      setPassword("")
+    } catch (err) {
+      setError(err.message || "Signup failed.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const inputClass =
@@ -33,7 +91,6 @@ const AuthModal = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-white rounded-lg w-96 p-6 relative">
-
         <XIcon
           className="absolute top-4 right-4 cursor-pointer text-black"
           onClick={onClose}
@@ -48,15 +105,33 @@ const AuthModal = ({ isOpen, onClose }) => {
                 type="email"
                 placeholder="Email"
                 className={inputClass}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
               <input
                 type="password"
                 placeholder="Password"
                 className={inputClass}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
 
-              <button className="w-full bg-primary text-white py-2 rounded cursor-pointer">
-                Login
+              {error && (
+                <p className="mb-3 text-sm text-red-600">{error}</p>
+              )}
+
+              {successMessage && (
+                <p className="mb-3 text-sm text-green-600">
+                  {successMessage}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-primary text-white py-2 rounded cursor-pointer disabled:opacity-60"
+              >
+                {isSubmitting ? "Logging in..." : "Login"}
               </button>
             </form>
 
@@ -64,7 +139,11 @@ const AuthModal = ({ isOpen, onClose }) => {
               Haven't had an account?{" "}
               <span
                 className="text-primary cursor-pointer font-medium"
-                onClick={() => setMode("signup")}
+                onClick={() => {
+                  setMode("signup")
+                  setError("")
+                  setSuccessMessage("")
+                }}
               >
                 Sign up
               </span>
@@ -79,20 +158,40 @@ const AuthModal = ({ isOpen, onClose }) => {
                 type="text"
                 placeholder="Name"
                 className={inputClass}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
               />
               <input
                 type="email"
                 placeholder="Email"
                 className={inputClass}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
               <input
                 type="password"
                 placeholder="Password"
                 className={inputClass}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
 
-              <button className="w-full bg-primary text-white py-2 rounded cursor-pointer">
-                Create account
+              {error && (
+                <p className="mb-3 text-sm text-red-600">{error}</p>
+              )}
+
+              {successMessage && (
+                <p className="mb-3 text-sm text-green-600">
+                  {successMessage}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-primary text-white py-2 rounded cursor-pointer disabled:opacity-60"
+              >
+                {isSubmitting ? "Creating account..." : "Create account"}
               </button>
             </form>
 
@@ -100,7 +199,11 @@ const AuthModal = ({ isOpen, onClose }) => {
               Already have an account?{" "}
               <span
                 className="text-primary cursor-pointer font-medium"
-                onClick={() => setMode("login")}
+                onClick={() => {
+                  setMode("login")
+                  setError("")
+                  setSuccessMessage("")
+                }}
               >
                 Login
               </span>
