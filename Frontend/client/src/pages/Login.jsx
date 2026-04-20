@@ -1,28 +1,43 @@
 import { useState } from "react"
 import { useAuth } from "../context/AuthContext"
 import { useNavigate } from "react-router-dom"
+import toast from "react-hot-toast"
 
 const Login = () => {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const { login } = useAuth()
   const navigate = useNavigate()
+  const baseUrl = import.meta.env.VITE_BASE_URL
 
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // MOCK backend response (sau này replace bằng API)
-    const fakeResponse = {
-      user: {
-        id: 1,
-        name: "Quan",
-        email
-      },
-      token: "fake-jwt-token"
-    }
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      })
 
-    login(fakeResponse.user, fakeResponse.token)
-    navigate("/")
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || "Login failed")
+      }
+
+      const token = await response.text()
+      login({ email }, token ? "cookie-authenticated" : null)
+      toast.success("Login successful")
+      navigate("/")
+    } catch (error) {
+      toast.error(error.message || "Login failed")
+    }
   }
 
   return (

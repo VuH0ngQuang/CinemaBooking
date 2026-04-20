@@ -3,6 +3,7 @@ package com.group10.cinemabooking.repository;
 import com.group10.cinemabooking.models.Showtimes;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -18,4 +19,14 @@ public interface ShowtimeRepository extends JpaRepository<Showtimes, Long> {
             LEFT JOIN FETCH r.cinema
             """)
     List<Showtimes> findAllJoinFetch();
+
+    @Query("""
+            SELECT DISTINCT s
+            FROM Showtimes s
+            JOIN FETCH s.movie m
+            JOIN FETCH s.screeningRoom r
+            LEFT JOIN FETCH r.cinema
+            WHERE m.movie_id = :movieId
+    """)
+    List<Showtimes> findByMovieId(@Param("movieId") Long movieId);
 }

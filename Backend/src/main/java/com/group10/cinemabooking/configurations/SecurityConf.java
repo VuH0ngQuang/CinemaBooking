@@ -39,17 +39,20 @@ public class SecurityConf {
     public final UserService userService;
     private final String corsAllowedOrigins;
     private final boolean corsAllowAll;
+    private final boolean corsAllowCredentials;
 
     @Autowired
     public SecurityConf(
             JwtAuthFilter jwtAuthFilter,
             UserService userService,
             @Value("${app.cors.allowed-origins:http://localhost:5173}") String corsAllowedOrigins,
-            @Value("${app.cors.allow-all:false}") boolean corsAllowAll) {
+            @Value("${app.cors.allow-all:false}") boolean corsAllowAll,
+            @Value("${app.cors.allow-credentials:true}") boolean corsAllowCredentials) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.userService = userService;
         this.corsAllowedOrigins = corsAllowedOrigins;
         this.corsAllowAll = corsAllowAll;
+        this.corsAllowCredentials = corsAllowCredentials;
     }
 
     @Bean
@@ -110,7 +113,7 @@ public class SecurityConf {
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("*"));
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(corsAllowCredentials);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

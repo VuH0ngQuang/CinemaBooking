@@ -4,6 +4,7 @@ import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.services.JwtService;
 import com.group10.cinemabooking.services.UserService;
 import com.group10.cinemabooking.utils.InAppCache;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +24,7 @@ import java.util.List;
 
 @Component
 public class JwtAuthFilter  extends OncePerRequestFilter {
+    private static final String AUTH_COOKIE_NAME = "auth_token";
     private final UserService userService;
     private final JwtService jwtService;
     private final InAppCache<String, String> tokenCache;
@@ -42,9 +44,19 @@ public class JwtAuthFilter  extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String authHeader = request.getHeader("Authorization");
-
+        String token = null;
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+            token = authHeader.substring(7);
+        } else if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if (AUTH_COOKIE_NAME.equals(cookie.getName())) {
+                    token = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (token != null && !token.isBlank()) {
             //Check if token is in whitelist
             if (!tokenCache.contains(token)) {
                 // Token not known/active → skip auth

@@ -10,6 +10,8 @@ public interface ShowtimeService {
 
     List<ShowtimeDto> getAllShowtimes();
 
+    List<ShowtimeDto> getAllByMovieId(Long movieId);
+
     ShowtimeDto getShowtimeById(Long showtimeId);
 
     ShowtimeDto updateShowtime(Long showtimeId, ShowtimeDto showtimeDto);

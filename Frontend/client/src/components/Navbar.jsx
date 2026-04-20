@@ -8,10 +8,10 @@ import AuthModal from './AuthModal'
 const Navbar = () => {
 
   const [isOpen, setIsOpen] = useState(false)
-  const [isAuthOpen, setIsAuthOpen] = useState(false)
 
-  const { user, logout } = useAuth()
+  const { user, logout, authModalOpen, openAuthModal, closeAuthModal } = useAuth()
   const navigate = useNavigate()
+  const displayName = user?.full_name || user?.name || user?.email || "User"
 
   return (
     <div className='fixed top-0 left-0 z-50 w-full flex items-center
@@ -35,6 +35,11 @@ const Navbar = () => {
 
         <Link onClick={() => { window.scrollTo(0,0); setIsOpen(false) }} to='/'>Home</Link>
         <Link onClick={() => { window.scrollTo(0,0); setIsOpen(false) }} to='/movies'>Movies</Link>
+        {user && (
+          <Link onClick={() => { window.scrollTo(0,0); setIsOpen(false) }} to='/my-bookings'>
+            My Bookings
+          </Link>
+        )}
       </div>
 
       <div className='flex items-center gap-8'>
@@ -42,14 +47,14 @@ const Navbar = () => {
 
         {!user ? (
           <button
-            onClick={() => setIsAuthOpen(true)}
+            onClick={() => openAuthModal()}
             className="px-4 py-1 sm:px-7 sm:py-2 bg-primary rounded-full cursor-pointer"
           >
             Login
           </button>
         ) : (
           <div className="flex items-center gap-4">
-            <span className="text-white">{user.name}</span>
+            <span className="text-white">{displayName}</span>
             <button
               onClick={() => {
                 logout()
@@ -70,8 +75,8 @@ const Navbar = () => {
 
       {/* AUTH MODAL */}
       <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        isOpen={authModalOpen}
+        onClose={() => closeAuthModal()}
       />
     </div>
   )

@@ -14,12 +14,11 @@ const HeroSection = () => {
   const [movies, setMovies] = useState([])
   const [activeIndex, setActiveIndex] = useState(0)
   const [displayedIndex, setDisplayedIndex] = useState(0)
-  const [incomingIndex, setIncomingIndex] = useState(null)
-  const [incomingImageUrl, setIncomingImageUrl] = useState(null)
+  const [layerUrls, setLayerUrls] = useState([FALLBACK_IMAGE_URL, FALLBACK_IMAGE_URL])
+  const [visibleLayer, setVisibleLayer] = useState(0)
+  const [pendingLayer, setPendingLayer] = useState(null)
   const [isFading, setIsFading] = useState(false)
   const fadeTimeoutRef = useRef(null)
-  const preloadImageRef = useRef(null)
-  const fadeRafRef = useRef(null)
 
   useEffect(() => {
     try {
@@ -56,59 +55,45 @@ const HeroSection = () => {
 
     const candidateMovie = movies[activeIndex]
     const nextUrl = getImageUrl(candidateMovie)
-    const preloadImage = new Image()
-    preloadImage.referrerPolicy = 'no-referrer'
-    preloadImage.src = nextUrl
-    preloadImageRef.current = preloadImage
 
-    const startFade = () => {
-      setIncomingImageUrl(nextUrl)
-      setIncomingIndex(activeIndex)
-      setIsFading(false)
-
-      if (fadeTimeoutRef.current) {
-        clearTimeout(fadeTimeoutRef.current)
-      }
-
-      if (fadeRafRef.current) {
-        cancelAnimationFrame(fadeRafRef.current)
-      }
-
-      fadeRafRef.current = requestAnimationFrame(() => {
-        setIsFading(true)
-        fadeRafRef.current = null
-      })
-
-      fadeTimeoutRef.current = setTimeout(() => {
-        setDisplayedIndex(activeIndex)
-        setIncomingIndex(null)
-        setIncomingImageUrl(null)
-        setIsFading(false)
-        fadeTimeoutRef.current = null
-      }, FADE_DURATION_MS)
-    }
-
-    if (preloadImage.complete) {
-      startFade()
+    const targetLayer = visibleLayer === 0 ? 1 : 0
+    if (layerUrls[targetLayer] === nextUrl) {
+      setPendingLayer(targetLayer)
     } else {
-      preloadImage.onload = startFade
+      setLayerUrls((previous) => {
+        const updated = [...previous]
+        updated[targetLayer] = nextUrl
+        return updated
+      })
+      setPendingLayer(targetLayer)
     }
 
     return () => {
-      if (preloadImageRef.current) {
-        preloadImageRef.current.onload = null
-        preloadImageRef.current = null
-      }
-      if (fadeRafRef.current) {
-        cancelAnimationFrame(fadeRafRef.current)
-        fadeRafRef.current = null
-      }
       if (fadeTimeoutRef.current) {
         clearTimeout(fadeTimeoutRef.current)
         fadeTimeoutRef.current = null
       }
     }
-  }, [activeIndex, displayedIndex, movies])
+  }, [activeIndex, displayedIndex, movies, visibleLayer, layerUrls])
+
+  const startTransitionToPendingLayer = () => {
+    if (pendingLayer === null) {
+      return
+    }
+
+    setIsFading(true)
+    if (fadeTimeoutRef.current) {
+      clearTimeout(fadeTimeoutRef.current)
+    }
+
+    fadeTimeoutRef.current = setTimeout(() => {
+      setVisibleLayer(pendingLayer)
+      setDisplayedIndex(activeIndex)
+      setPendingLayer(null)
+      setIsFading(false)
+      fadeTimeoutRef.current = null
+    }, FADE_DURATION_MS)
+  }
 
   const activeMovie = useMemo(() => {
     if (movies.length === 0) {
@@ -122,15 +107,19 @@ const HeroSection = () => {
     ? `https://minio.vuhongquang.com/cinemabooking/poster/horizontal/${movie.movie_id}.jpg`
     : FALLBACK_IMAGE_URL
 
-  const currentBackgroundMovie = movies[displayedIndex]
-  const currentImageUrl = getImageUrl(currentBackgroundMovie)
-
   const genre = activeMovie?.genre || 'Unknown'
   const releaseYear = activeMovie?.release_date
     ? new Date(activeMovie.release_date).getFullYear()
     : 'N/A'
   const duration = activeMovie?.duration_minutes ? `${activeMovie.duration_minutes}m` : 'N/A'
   const title = activeMovie?.title || 'Avengers: Endgame'
+
+  const getLayerOpacityClass = (layerIndex) => {
+    if (isFading && pendingLayer !== null) {
+      return pendingLayer === layerIndex ? 'opacity-100' : 'opacity-0'
+    }
+    return visibleLayer === layerIndex ? 'opacity-100' : 'opacity-0'
+  }
 
   const handleImageLoad = (e) => {
     const img = e.target
@@ -151,22 +140,31 @@ const HeroSection = () => {
       
       {/* Background Image */}
       <img
-        src={currentImageUrl}
+        src={layerUrls[0]}
         alt="movie background"
         referrerPolicy="no-referrer"
-        onLoad={handleImageLoad}
+        onLoad={(event) => {
+          handleImageLoad(event)
+          if (pendingLayer === 0 && !isFading) {
+            startTransitionToPendingLayer()
+          }
+        }}
         style={{ objectPosition: position }}
-        className='absolute inset-0 -z-10 w-full h-full object-cover'
+        className={`absolute inset-0 -z-10 w-full h-full object-cover transition-opacity duration-[900ms] ${getLayerOpacityClass(0)}`}
       />
-      {incomingImageUrl && (
-        <img
-          src={incomingImageUrl}
-          alt="next movie background"
-          referrerPolicy="no-referrer"
-          style={{ objectPosition: position }}
-          className={`absolute inset-0 -z-10 w-full h-full object-cover transition-opacity duration-[900ms] ${isFading && incomingIndex !== null ? 'opacity-100' : 'opacity-0'}`}
-        />
-      )}
+      <img
+        src={layerUrls[1]}
+        alt="next movie background"
+        referrerPolicy="no-referrer"
+        onLoad={(event) => {
+          handleImageLoad(event)
+          if (pendingLayer === 1 && !isFading) {
+            startTransitionToPendingLayer()
+          }
+        }}
+        style={{ objectPosition: position }}
+        className={`absolute inset-0 -z-10 w-full h-full object-cover transition-opacity duration-[900ms] ${getLayerOpacityClass(1)}`}
+      />
 
       {/* Overlay */}
       <div className='absolute inset-0 -z-10 bg-black/60' />

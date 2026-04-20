@@ -37,6 +37,12 @@ public class ShowtimesController {
         return ResponseEntity.ok(showtime);
     }
 
+    @GetMapping("/movie/{id}")
+    public ResponseEntity<List<ShowtimeDto>> getAllByMovieId(@PathVariable("id") Long movieId) {
+        List<ShowtimeDto> showtimes = showtimeService.getAllByMovieId(movieId);
+        return ResponseEntity.ok(showtimes);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<ShowtimeDto> updateShowtime(@PathVariable("id") Long showtimeId,
                                                       @Valid @RequestBody ShowtimeDto showtimeDto) {

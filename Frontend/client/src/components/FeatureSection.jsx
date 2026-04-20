@@ -6,7 +6,6 @@ import BlurCircle from './BlurCircle'
 const FeatureSection = () => {
   const navigate = useNavigate()
   const [movies, setMovies] = useState([])
-  const baseUrl = import.meta.env.VITE_BASE_URL || window.location.origin
 
   useEffect(() => {
     try {
@@ -59,7 +58,7 @@ const FeatureSection = () => {
 
                     <div className='flex items-center justify-between mt-4 pb-3'>
                         <a
-                            href={`${baseUrl.replace(/\/$/, '')}/movies/${movie.movie_id}`}
+                            href={`/movies/${movie.movie_id}`}
                             className='px-4 py-2 text-xs bg-primary hover:bg-primary-dull transition rounded-dull font-medium cursor-pointer'
                         >
                             Buy Ticket
@@ -79,3 +78,4 @@ const FeatureSection = () => {
 }
 
 export default FeatureSection
+

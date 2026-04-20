@@ -20,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static java.util.Arrays.stream;
+
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -67,6 +69,15 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                 .map(this::toDto)
                 .toList();
     }
+
+    @Override
+    public List<ShowtimeDto> getAllByMovieId(Long movieId) {
+        return showtimeRepository.findByMovieId(movieId)
+                .stream()
+                .map(this::toDto)
+                .toList();
+    }
+
 
     @Override
     public ShowtimeDto getShowtimeById(Long showtimeId) {

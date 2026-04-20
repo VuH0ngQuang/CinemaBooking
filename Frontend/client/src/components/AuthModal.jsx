@@ -1,29 +1,126 @@
 import { useState } from "react"
 import { XIcon } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
+import toast from "react-hot-toast"
 
 const AuthModal = ({ isOpen, onClose }) => {
   const [mode, setMode] = useState("login")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const { login } = useAuth()
+  const baseUrl = import.meta.env.VITE_BASE_URL
 
   if (!isOpen) return null
 
-  const handleLogin = (e) => {
-    e.preventDefault()
-    login(
-      { id: 1, name: "Quan", email: "quan@gmail.com" },
-      "fake-jwt-token"
-    )
+  const resetForm = () => {
+    setEmail("")
+    setPassword("")
+    setFullName("")
+  }
+
+  const closeModal = () => {
+    resetForm()
     onClose()
   }
 
-  const handleSignup = (e) => {
+  const fetchCurrentUser = async () => {
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/me`, {
+      credentials: "include",
+    })
+    if (!response.ok) {
+      throw new Error("Failed to load current user")
+    }
+    return response.json()
+  }
+
+  const handleLogin = async (e) => {
     e.preventDefault()
-    login(
-      { id: 2, name: "New User", email: "new@gmail.com" },
-      "fake-jwt-token"
-    )
-    onClose()
+    if (!baseUrl) {
+      toast.error("VITE_BASE_URL is not configured")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || "Login failed")
+      }
+
+      const accessToken = await response.text()
+      const userData = await fetchCurrentUser()
+      login(userData, accessToken || "cookie-authenticated")
+      toast.success("Login successful")
+      closeModal()
+    } catch (error) {
+      toast.error(error.message || "Login failed")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleSignup = async (e) => {
+    e.preventDefault()
+    if (!baseUrl) {
+      toast.error("VITE_BASE_URL is not configured")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const registerResponse = await fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName,
+        }),
+      })
+
+      if (!registerResponse.ok) {
+        const message = await registerResponse.text()
+        throw new Error(message || "Registration failed")
+      }
+
+      const loginResponse = await fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      })
+
+      if (!loginResponse.ok) {
+        const message = await loginResponse.text()
+        throw new Error(message || "Auto login failed")
+      }
+
+      const accessToken = await loginResponse.text()
+      const userData = await fetchCurrentUser()
+      login(userData, accessToken || "cookie-authenticated")
+      toast.success("Account created")
+      closeModal()
+    } catch (error) {
+      toast.error(error.message || "Registration failed")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const inputClass =
@@ -36,7 +133,7 @@ const AuthModal = ({ isOpen, onClose }) => {
 
         <XIcon
           className="absolute top-4 right-4 cursor-pointer text-black"
-          onClick={onClose}
+          onClick={closeModal}
         />
 
         {mode === "login" ? (
@@ -48,15 +145,21 @@ const AuthModal = ({ isOpen, onClose }) => {
                 type="email"
                 placeholder="Email"
                 className={inputClass}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
               />
               <input
                 type="password"
                 placeholder="Password"
                 className={inputClass}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
               />
 
-              <button className="w-full bg-primary text-white py-2 rounded cursor-pointer">
-                Login
+              <button disabled={isSubmitting} className="w-full bg-primary text-white py-2 rounded cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+                {isSubmitting ? "Logging in..." : "Login"}
               </button>
             </form>
 
@@ -64,7 +167,10 @@ const AuthModal = ({ isOpen, onClose }) => {
               Haven't had an account?{" "}
               <span
                 className="text-primary cursor-pointer font-medium"
-                onClick={() => setMode("signup")}
+                onClick={() => {
+                  setMode("signup")
+                  setPassword("")
+                }}
               >
                 Sign up
               </span>
@@ -79,20 +185,29 @@ const AuthModal = ({ isOpen, onClose }) => {
                 type="text"
                 placeholder="Name"
                 className={inputClass}
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                required
               />
               <input
                 type="email"
                 placeholder="Email"
                 className={inputClass}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
               />
               <input
                 type="password"
                 placeholder="Password"
                 className={inputClass}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
               />
 
-              <button className="w-full bg-primary text-white py-2 rounded cursor-pointer">
-                Create account
+              <button disabled={isSubmitting} className="w-full bg-primary text-white py-2 rounded cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+                {isSubmitting ? "Creating..." : "Create account"}
               </button>
             </form>
 
@@ -100,7 +215,10 @@ const AuthModal = ({ isOpen, onClose }) => {
               Already have an account?{" "}
               <span
                 className="text-primary cursor-pointer font-medium"
-                onClick={() => setMode("login")}
+                onClick={() => {
+                  setMode("login")
+                  setFullName("")
+                }}
               >
                 Login
               </span>

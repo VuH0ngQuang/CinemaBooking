@@ -48,5 +48,6 @@ app:
       startTls: true
 
     cors:
-      allow-all: ${CORS_ALLOW_ALL:false}
+      allow-all: ${CORS_ALLOW_ALL:true}
+      allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://103.162.20.119:5173}
