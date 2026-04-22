@@ -326,11 +326,18 @@ public class BookingSeatServiceImpl implements BookingSeatService {
 
     @Override
     @Transactional
-    public void deleteBookingSeat(Long bookingSeatId) {
-        BookingSeats bookingSeat = bookingSeatRepository.findById(bookingSeatId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "BookingSeat not found with id: " + bookingSeatId
-                ));
+    public void deleteBookingSeat(BookingSeatRequestDto requestDto) {
+        validateRequest(requestDto);
+
+        BookingSeats bookingSeat = bookingSeatRepository.findByBookingIdAndSeatId(
+                requestDto.getBookingId(),
+                requestDto.getSeatId()
+        ).orElseThrow(() -> new ResourceNotFoundException(
+                "BookingSeat not found for bookingId=" + requestDto.getBookingId()
+                        + ", seatId=" + requestDto.getSeatId()
+        ));
+
+        Long bookingSeatId = bookingSeat.getBooking_seat_id();
 
         if (bookingSeat.getBooking().getBooking_status() != BookingStatusEnum.PENDING) {
             throw new InvalidRequestException("Booking must be PENDING to delete seat");

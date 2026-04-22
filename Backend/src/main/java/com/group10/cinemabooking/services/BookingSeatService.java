@@ -14,5 +14,5 @@ public interface BookingSeatService {
 
     BookingSeatDto updateBookingSeat(Long bookingSeatId, BookingSeatRequestDto requestDto);
 
-    void deleteBookingSeat(Long bookingSeatId);
+    void deleteBookingSeat(BookingSeatRequestDto requestDto);
 }

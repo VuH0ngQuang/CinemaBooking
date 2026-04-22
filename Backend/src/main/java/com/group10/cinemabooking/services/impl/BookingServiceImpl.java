@@ -83,7 +83,7 @@ public class BookingServiceImpl implements BookingService {
     public BookingDto createBooking(BookingRequestDto requestDto) {
         validateRequest(requestDto);
 
-        String lockKey = "booking:create:" + requestDto.getUserId() + ":" + requestDto.getShowtimeId();
+        String lockKey = "booking:create:" + requestDto.getUserId();
         ReentrantLock lock = lockManager.getLock(lockKey);
         lock.lock();
         try {
@@ -97,10 +97,66 @@ public class BookingServiceImpl implements BookingService {
                             "Showtime not found with id: " + requestDto.getShowtimeId()
                     ));
 
+            List<Bookings> currentDrafts = bookingRepository.findCurrentDraftBookingsByUserId(requestDto.getUserId());
+            if (!currentDrafts.isEmpty()) {
+                Bookings draftBooking = currentDrafts.get(0);
+
+                // In case of multiple draft rows, keep latest active and deactivate others.
+                for (int i = 1; i < currentDrafts.size(); i++) {
+                    Bookings staleDraft = currentDrafts.get(i);
+                    staleDraft.setCurrentDraft(false);
+                    staleDraft.setUpdated_at(new Date());
+                    bookingRepository.save(staleDraft);
+                    bookingCache.put(staleDraft.getBooking_id(), staleDraft);
+                }
+
+                if (draftBooking.getShowtime() == null
+                        || draftBooking.getShowtime().getShowtime_id() != showtime.getShowtime_id()) {
+                    List<BookingSeats> bookingSeats = bookingSeatRepository.findAllByBookingId(draftBooking.getBooking_id());
+                    for (BookingSeats bookingSeat : bookingSeats) {
+                        long oldShowtimeId = draftBooking.getShowtime().getShowtime_id();
+                        long seatId = bookingSeat.getSeat().getSeat_id();
+
+                        String holdKey = buildSeatHoldKey(oldShowtimeId, seatId);
+                        seatHoldCache.remove(holdKey);
+
+                        ShowTimeSeats sts = showTimeSeatRepository.findByShowtimeIdAndSeatId(oldShowtimeId, seatId)
+                                .orElse(null);
+                        if (sts != null
+                                && sts.getStatus() == ShowtimeSeatsStatusEnum.HELD
+                                && String.valueOf(draftBooking.getBooking_id()).equals(sts.getHold_token())) {
+                            sts.setStatus(ShowtimeSeatsStatusEnum.AVAILABLE);
+                            sts.setHold_token(null);
+                            sts.setHold_expires_at(null);
+                            showTimeSeatRepository.save(sts);
+                        }
+                    }
+
+                    if (!bookingSeats.isEmpty()) {
+                        bookingSeatRepository.deleteAll(bookingSeats);
+                    }
+
+                    draftBooking.setShowtime(showtime);
+                    draftBooking.setTotal_price(0L);
+                    draftBooking.setExpired_at(buildExpiredAt());
+                    draftBooking.setUpdated_at(new Date());
+                    draftBooking.setCurrentDraft(true);
+                } else {
+                    // Same showtime: refresh draft expiry for active checkout session.
+                    draftBooking.setExpired_at(buildExpiredAt());
+                    draftBooking.setUpdated_at(new Date());
+                }
+
+                Bookings reusedBooking = bookingRepository.save(draftBooking);
+                bookingCache.put(reusedBooking.getBooking_id(), reusedBooking);
+                return toDto(reusedBooking);
+            }
+
             Bookings booking = Bookings.builder()
                     .user(user)
                     .showtime(showtime)
                     .booking_status(BookingStatusEnum.PENDING)
+                    .currentDraft(true)
                     .expired_at(buildExpiredAt())
                     .build();
 
@@ -195,6 +251,7 @@ public class BookingServiceImpl implements BookingService {
                     .showtime(showtime)
                     .total_price(requestDto.getTotalPrice())
                     .booking_status(BookingStatusEnum.PENDING)
+                    .currentDraft(true)
                     .expired_at(buildExpiredAt())
                     .build();
 
@@ -377,6 +434,7 @@ public class BookingServiceImpl implements BookingService {
                 .canceledAt(booking.getCanceled_at())
                 .userId(booking.getUser() != null ? booking.getUser().getUser_id() : null)
                 .showtimeId(booking.getShowtime() != null ? booking.getShowtime().getShowtime_id() : null)
+                .currentDraft(booking.isCurrentDraft())
                 .build();
     }
 
@@ -437,4 +495,5 @@ public class BookingServiceImpl implements BookingService {
     private Date buildExpiredAt() {
         return new Date(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(15));
     }
+
 }

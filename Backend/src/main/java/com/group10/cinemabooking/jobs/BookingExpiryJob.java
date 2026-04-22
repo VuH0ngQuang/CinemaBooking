@@ -52,6 +52,16 @@ public class BookingExpiryJob {
         }
     }
 
+    @Scheduled(fixedDelay = 60000)
+    @Transactional
+    public void deleteExpiredCurrentDraftBookings() {
+        Date now = new Date();
+        List<Bookings> expiredDraftBookings = bookingRepository.findExpiredCurrentDraftBookings(now);
+        for (Bookings booking : expiredDraftBookings) {
+            deleteSingleExpiredDraftSafely(booking.getBooking_id());
+        }
+    }
+
     private void expireSingleBookingSafely(Long bookingId) {
         String bookingLockKey = "booking:expire:" + bookingId;
         ReentrantLock bookingLock = lockManager.getLock(bookingLockKey);
@@ -134,5 +144,31 @@ public class BookingExpiryJob {
 
     private String buildSeatHoldKey(Long showtimeId, Long seatId) {
         return "showtime:" + showtimeId + ":seat:" + seatId;
+    }
+
+    private void deleteSingleExpiredDraftSafely(Long bookingId) {
+        String bookingLockKey = "booking:deleteExpiredDraft:" + bookingId;
+        ReentrantLock bookingLock = lockManager.getLock(bookingLockKey);
+        bookingLock.lock();
+        try {
+            Bookings booking = bookingRepository.findById(bookingId).orElse(null);
+            if (booking == null) {
+                bookingCache.remove(bookingId);
+                return;
+            }
+
+            if (!booking.isCurrentDraft() || booking.getBooking_status() != BookingStatusEnum.EXPIRED) {
+                return;
+            }
+
+            if (booking.getExpired_at() == null || booking.getExpired_at().after(new Date())) {
+                return;
+            }
+
+            bookingRepository.delete(booking);
+            bookingCache.remove(bookingId);
+        } finally {
+            bookingLock.unlock();
+        }
     }
 }

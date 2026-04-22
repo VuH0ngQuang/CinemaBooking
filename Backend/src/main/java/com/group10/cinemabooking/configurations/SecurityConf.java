@@ -22,6 +22,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -64,10 +65,21 @@ public class SecurityConf {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/webhook/**").permitAll()
-                        .requestMatchers("/api/movies/**").permitAll()
-                        .requestMatchers("/api/showtimes/**").permitAll()
-                        .requestMatchers("/api/screeningrooms/**").permitAll()
-                        .requestMatchers("/api/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/movies/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/showtimes/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/screeningrooms/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/seats/**").permitAll()
+                        .requestMatchers("/api/movies/**").hasRole("ADMIN")
+                        .requestMatchers("/api/showtimes/**").hasRole("ADMIN")
+                        .requestMatchers("/api/screeningrooms/**").hasRole("ADMIN")
+                        .requestMatchers("/api/seats/**").hasRole("ADMIN")
+                        .requestMatchers("/api/bookings/my").authenticated()
+                        .requestMatchers("/api/bookings/**").authenticated()
+                        .requestMatchers("/api/booking-seats/**").authenticated()
+                        .requestMatchers("/api/payments/**").authenticated()
+                        .requestMatchers("/api/tickets/**").authenticated()
+                        .requestMatchers("/api/users/**").authenticated()
+                        .requestMatchers("/api/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

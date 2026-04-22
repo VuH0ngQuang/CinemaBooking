@@ -93,4 +93,24 @@ public interface BookingRepository extends JpaRepository<Bookings, Long> {
                 @Param("status") BookingStatusEnum status,
                 @Param("now") Date now
         );
+
+    @Query("""
+            SELECT b
+            FROM Bookings b
+            WHERE b.user.user_id = :userId
+              AND b.booking_status = com.group10.cinemabooking.enums.BookingStatusEnum.PENDING
+              AND b.currentDraft = true
+            ORDER BY b.updated_at DESC, b.created_at DESC
+            """)
+    List<Bookings> findCurrentDraftBookingsByUserId(@Param("userId") Long userId);
+
+    @Query("""
+            SELECT b
+            FROM Bookings b
+            WHERE b.currentDraft = true
+              AND b.booking_status = com.group10.cinemabooking.enums.BookingStatusEnum.EXPIRED
+              AND b.expired_at IS NOT NULL
+              AND b.expired_at < :now
+            """)
+    List<Bookings> findExpiredCurrentDraftBookings(@Param("now") Date now);
 }

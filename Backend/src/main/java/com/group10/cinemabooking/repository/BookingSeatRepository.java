@@ -56,6 +56,15 @@ public interface BookingSeatRepository extends JpaRepository<BookingSeats, Long>
                                                                       @Param("bookingSeatId") long bookingSeatId);
 
     @Query("""
+            SELECT bs
+            FROM BookingSeats bs
+            WHERE bs.booking.booking_id = :bookingId
+              AND bs.seat.seat_id = :seatId
+            """)
+    java.util.Optional<BookingSeats> findByBookingIdAndSeatId(@Param("bookingId") long bookingId,
+                                                              @Param("seatId") long seatId);
+
+    @Query("""
             SELECT DISTINCT bs
             FROM BookingSeats bs
             JOIN FETCH bs.booking

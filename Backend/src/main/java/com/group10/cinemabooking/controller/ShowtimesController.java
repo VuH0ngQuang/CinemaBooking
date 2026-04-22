@@ -1,6 +1,7 @@
 package com.group10.cinemabooking.controller;
 
 import com.group10.cinemabooking.dtos.ShowtimeDto;
+import com.group10.cinemabooking.dtos.ShowtimeSeatStatusDto;
 import com.group10.cinemabooking.services.ShowtimeService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -41,6 +42,14 @@ public class ShowtimesController {
     public ResponseEntity<List<ShowtimeDto>> getAllByMovieId(@PathVariable("id") Long movieId) {
         List<ShowtimeDto> showtimes = showtimeService.getAllByMovieId(movieId);
         return ResponseEntity.ok(showtimes);
+    }
+
+    @GetMapping("/{id}/seats/status")
+    public ResponseEntity<List<ShowtimeSeatStatusDto>> getSeatStatusesByShowtime(
+            @PathVariable("id") Long showtimeId,
+            @RequestParam(value = "bookingId", required = false) Long bookingId
+    ) {
+        return ResponseEntity.ok(showtimeService.getSeatStatusesByShowtimeId(showtimeId, bookingId));
     }
 
     @PutMapping("/{id}")

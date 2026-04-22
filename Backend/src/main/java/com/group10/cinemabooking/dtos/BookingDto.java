@@ -23,4 +23,5 @@ public class BookingDto {
     private Date canceledAt;
     private Long userId;
     private Long showtimeId;
+    private Boolean currentDraft;
 }

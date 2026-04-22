@@ -53,6 +53,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Payments> paymentCache;
     private final InAppCache<Long, Bookings> bookingCache;
+    private final InAppCache<Long, BookingSeats> bookingSeatCache;
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
     private final PayOSService payOSService;
@@ -81,6 +82,9 @@ public class PaymentServiceImpl implements PaymentService {
                 throw new InvalidRequestException(
                         "Cannot create payment for booking with status: " + booking.getBooking_status()
                 );
+            }
+            if (!booking.isCurrentDraft()) {
+                throw new InvalidRequestException("Cannot create payment for inactive draft booking");
             }
 
             boolean hasSuccessPayment = paymentRepository.existsByBookingIdAndStatus(
@@ -230,8 +234,9 @@ public class PaymentServiceImpl implements PaymentService {
                 booking.setBooking_status(BookingStatusEnum.PAID);
                 booking.setConfirmed_at(new Date());
                 booking.setUpdated_at(new Date());
-                bookingRepository.save(booking);
             }
+            booking.setCurrentDraft(false);
+            bookingRepository.save(booking);
 
             finalizeSeatsForSuccessfulPayment(booking);
 
@@ -338,7 +343,8 @@ public class PaymentServiceImpl implements PaymentService {
 
                 // 3. Confirm booking seat row
                 bookingSeat.setStatus(BookingSeatStatusEnum.CONFIRMED);
-                bookingSeatRepository.save(bookingSeat);
+                BookingSeats savedBookingSeat = bookingSeatRepository.save(bookingSeat);
+                bookingSeatCache.put(savedBookingSeat.getBooking_seat_id(), savedBookingSeat);
                 boundedFlushHelper.onWrite();
             }
 

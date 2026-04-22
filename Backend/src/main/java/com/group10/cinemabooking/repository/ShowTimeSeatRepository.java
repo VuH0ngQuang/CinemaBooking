@@ -29,5 +29,13 @@ public interface ShowTimeSeatRepository extends JpaRepository<ShowTimeSeats, Lon
             """)
     List<ShowTimeSeats> findAllByShowtimeIdAndSeatIdIn(@Param("showtimeId") long showtimeId,
                                                        @Param("seatIds") Collection<Long> seatIds);
+
+    @Query("""
+            SELECT sts
+            FROM ShowTimeSeats sts
+            JOIN FETCH sts.seat
+            WHERE sts.showtime.showtime_id = :showtimeId
+            """)
+    List<ShowTimeSeats> findAllByShowtimeId(@Param("showtimeId") long showtimeId);
 }
 

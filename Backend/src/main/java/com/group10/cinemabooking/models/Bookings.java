@@ -49,6 +49,10 @@ public class Bookings {
     @Column(nullable = true)
     private Date canceled_at;
 
+    @Column(name = "is_current_draft", nullable = false)
+    @Builder.Default
+    private boolean currentDraft = true;
+
     @ToString.Exclude
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "showtime_id", nullable = false)

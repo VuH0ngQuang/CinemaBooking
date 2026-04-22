@@ -1,11 +1,17 @@
 package com.group10.cinemabooking.services.impl;
 
 import com.group10.cinemabooking.dtos.ShowtimeDto;
+import com.group10.cinemabooking.dtos.ShowtimeSeatStatusDto;
+import com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum;
 import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
 import com.group10.cinemabooking.models.Movies;
 import com.group10.cinemabooking.models.ScreeningRooms;
+import com.group10.cinemabooking.models.Seats;
+import com.group10.cinemabooking.models.ShowTimeSeats;
 import com.group10.cinemabooking.models.Showtimes;
+import com.group10.cinemabooking.repository.SeatRepository;
+import com.group10.cinemabooking.repository.ShowTimeSeatRepository;
 import com.group10.cinemabooking.repository.ShowtimeRepository;
 import com.group10.cinemabooking.services.ShowtimeService;
 import com.group10.cinemabooking.utils.InAppCache;
@@ -18,7 +24,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Date;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.stream;
 
@@ -33,6 +43,8 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Showtimes> showtimeCache;
     private final EntityManager entityManager;
+    private final SeatRepository seatRepository;
+    private final ShowTimeSeatRepository showTimeSeatRepository;
 
 
     @Override
@@ -51,8 +63,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         try {
             updateFromDto(showtime, showtimeDto);
             saveShowtime(showtime);
-
-
             return toDto(showtime);
         } catch (Exception e) {
             log.error("Error creating showtime: {}", e.getMessage());
@@ -129,6 +139,64 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         } finally {
             lock.unlock();
         }
+    }
+
+    @Override
+    public List<ShowtimeSeatStatusDto> getSeatStatusesByShowtimeId(Long showtimeId, Long bookingId) {
+        Showtimes showtime = showtimeRepository.findById(showtimeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Showtime not found with id: " + showtimeId));
+
+        if (showtime.getScreeningRoom() == null) {
+            throw new InvalidRequestException("Showtime has no screening room configured");
+        }
+
+        List<Seats> seats = seatRepository.findByRoomId(showtime.getScreeningRoom().getRoom_id());
+        List<ShowTimeSeats> showtimeSeats = showTimeSeatRepository.findAllByShowtimeId(showtimeId);
+        Map<Long, ShowTimeSeats> showtimeSeatMap = showtimeSeats.stream()
+                .collect(Collectors.toMap(sts -> sts.getSeat().getSeat_id(), Function.identity()));
+
+        Date now = new Date();
+
+        return seats.stream()
+                .map(seat -> {
+                    ShowTimeSeats showTimeSeat = showtimeSeatMap.get(seat.getSeat_id());
+                    ShowtimeSeatsStatusEnum status = ShowtimeSeatsStatusEnum.AVAILABLE;
+                    Date holdExpiresAt = null;
+                    boolean selectedByCurrentBooking = false;
+
+                    if (showTimeSeat != null) {
+                        status = showTimeSeat.getStatus() == null
+                                ? ShowtimeSeatsStatusEnum.AVAILABLE
+                                : showTimeSeat.getStatus();
+                        holdExpiresAt = showTimeSeat.getHold_expires_at();
+
+                        if (status == ShowtimeSeatsStatusEnum.HELD
+                                && holdExpiresAt != null
+                                && holdExpiresAt.before(now)) {
+                            status = ShowtimeSeatsStatusEnum.AVAILABLE;
+                            holdExpiresAt = null;
+                        }
+
+                        if (bookingId != null
+                                && showTimeSeat.getHold_token() != null
+                                && showTimeSeat.getHold_token().equals(String.valueOf(bookingId))) {
+                            selectedByCurrentBooking = true;
+                            status = ShowtimeSeatsStatusEnum.HELD;
+                        }
+                    }
+
+                    return ShowtimeSeatStatusDto.builder()
+                            .seatId(seat.getSeat_id())
+                            .seatRow(seat.getSeat_row())
+                            .seatCol(seat.getSeat_col())
+                            .seatLabel(seat.getSeat_label())
+                            .active(seat.is_active())
+                            .status(status)
+                            .holdExpiresAt(holdExpiresAt)
+                            .selectedByCurrentBooking(selectedByCurrentBooking)
+                            .build();
+                })
+                .toList();
     }
 
     private void validateTime(ShowtimeDto dto) {

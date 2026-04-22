@@ -254,6 +254,7 @@ public class TicketServiceImpl implements TicketService {
                     if (ticket.getStatus() != TicketStatusEnum.EXPIRED) {
                         ticket.setStatus(TicketStatusEnum.EXPIRED);
                         ticket = ticketRepository.save(ticket);
+                        ticketCache.put(ticket.getTicket_id(), ticket);
                     }
                     updatedTickets.add(toDto(ticket));
                     continue;
