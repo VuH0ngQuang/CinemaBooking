@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Confirmation - Cinema Booking</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin: 0; padding: 0; background-color: #09090b; font-family: 'Outfit', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff;">
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #09090b; padding: 40px 10px;">
+    <tr>
+        <td align="center">
+            <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #18181b; border: 1px solid #27272a; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+
+                <!-- Header Success Section -->
+                <tr>
+                    <td align="center" style="padding: 40px 20px; background: linear-gradient(135deg, #f84565 0%, #d63854 100%);">
+                        <div style="background-color: rgba(255,255,255,0.2); width: 60px; height: 60px; border-radius: 50%; display: inline-block; line-height: 60px; margin-bottom: 15px; text-align: center;">
+                            <span style="font-size: 30px; line-height: 60px;">🍿</span>
+                        </div>
+                        <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Booking Confirmed!</h1>
+                        <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 15px; font-weight: 300;">Get ready for the show, <span th:text="${username}">User</span>!</p>
+                    </td>
+                </tr>
+
+                <!-- Ticket Card Section -->
+                <tr>
+                    <td style="padding: 30px 30px 10px 30px;">
+                        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #27272a; border-radius: 16px; border: 1px dashed #3f3f46; border-left: 5px solid #f84565;">
+                            <tr>
+                                <td style="padding: 25px;">
+                                    <h2 th:text="${movieName}" style="margin: 0 0 5px 0; color: #ffffff; font-size: 22px; font-weight: 600;">Movie Title</h2>
+                                    <p style="margin: 0; color: #a1a1aa; font-size: 14px;">Cinema Experience</p>
+                                    
+                                    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-top: 25px;">
+                                        <tr>
+                                            <td width="50%" style="padding-bottom: 20px;">
+                                                <p style="margin: 0; color: #71717a; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Date & Time</p>
+                                                <p th:text="${showDateTime}" style="margin: 5px 0 0 0; color: #ffffff; font-size: 15px; font-weight: 400;">April 20, 2026 • 7:30 PM</p>
+                                            </td>
+                                            <td width="50%" style="padding-bottom: 20px;">
+                                                <p style="margin: 0; color: #71717a; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Screen</p>
+                                                <p th:text="${screenRoom}" style="margin: 5px 0 0 0; color: #ffffff; font-size: 15px; font-weight: 400;">Hall 04</p>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td width="50%">
+                                                <p style="margin: 0; color: #71717a; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Seats</p>
+                                                <p th:text="${seatNumbers}" style="margin: 5px 0 0 0; color: #ffffff; font-size: 15px; font-weight: 400;">G12, G13</p>
+                                            </td>
+                                            <td width="50%">
+                                                <p style="margin: 0; color: #71717a; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Ticket Code</p>
+                                                <p th:text="${ticketCode}" style="margin: 5px 0 0 0; color: #f84565; font-size: 16px; font-weight: 700;">CB-X92F-88</p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- QR Code & Cinema Info -->
+                <tr>
+                    <td style="padding: 20px 30px 30px 30px;">
+                        <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                            <tr>
+                                <td width="160" align="center" style="background-color: #ffffff; padding: 10px; border-radius: 12px;">
+                                    <!-- Placeholder QR Code API -->
+                                    <img th:src="${qrCodeUrl}" src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=BOOKING-ID" alt="Ticket QR Code" width="140" height="140" style="display: block;">
+                                </td>
+                                <td style="padding-left: 30px; vertical-align: top;">
+                                    <p style="margin: 0; color: #71717a; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Location</p>
+                                    <p th:text="${cinemaName}" style="margin: 5px 0 0 0; color: #ffffff; font-size: 16px; font-weight: 600;">Cinema Name</p>
+                                    <p th:text="${cinemaAddress}" style="margin: 5px 0 0 0; color: #a1a1aa; font-size: 13px; font-weight: 300; line-height: 1.4;">Cinema Address Line 1<br>City, State</p>
+                                    
+                                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #27272a;">
+                                        <p style="margin: 0; color: #71717a; font-size: 12px;">Total Paid: <span th:text="${totalAmount}" style="color: #ffffff; font-weight: 600;">150,000 VNĐ</span></p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- Footer CTA -->
+                <tr>
+                    <td align="center" style="padding: 10px 40px 40px 40px;">
+                        <p style="color: #71717a; font-size: 14px; margin-bottom: 25px; font-weight: 300;">Please present this digital ticket or the QR code at the cinema entrance.</p>
+                        <a th:href="${myBookingsUrl}"
+                           style="display: inline-block; background-color: transparent; color: #ffffff; padding: 12px 30px; border-radius: 50px; text-decoration: none; font-weight: 600; font-size: 14px; border: 1px solid #f84565;">
+                            View My Bookings
+                        </a>
+                    </td>
+                </tr>
+
+                <!-- Real Footer -->
+                <tr>
+                    <td align="center" style="padding: 30px; background-color: rgba(0,0,0,0.2); border-top: 1px solid #27272a;">
+                        <p style="margin: 0; color: #52525b; font-size: 11px; font-weight: 300;">
+                            Enjoy the show! If you have any issues, please contact our support at <br>
+                            <a href="mailto:support@cinemabooking.com" style="color: #f84565; text-decoration: none;">support@cinemabooking.com</a>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Cinema Booking</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin: 0; padding: 0; background-color: #09090b; font-family: 'Outfit', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff;">
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #09090b; padding: 40px 10px;">
+    <tr>
+        <td align="center">
+            <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #18181b; border: 1px solid #27272a; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+
+                <!-- Header Gradient -->
+                <tr>
+                    <td align="center" style="padding: 50px 20px; background: linear-gradient(135deg, #f84565 0%, #d63854 100%);">
+                        <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: -0.5px; text-transform: none;">Cinema Booking</h1>
+                        <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.8); font-size: 15px; font-weight: 300;">Your VIP Pass to the Big Screen</p>
+                    </td>
+                </tr>
+
+                <!-- Content Body -->
+                <tr>
+                    <td style="padding: 40px 40px 30px 40px;">
+                        <h2 style="color: #ffffff; margin: 0 0 20px 0; font-size: 26px; font-weight: 600;">Popcorn’s ready, <span th:text="${username}" style="color: #f84565;">User</span>! 🍿</h2>
+
+                        <p style="color: #a1a1aa; font-size: 16px; line-height: 1.7; margin-bottom: 30px; font-weight: 300;">
+                            We’re thrilled to have you! Your account is officially active. You’re now just a few taps away from the latest blockbusters, cozy seats, and the best surround sound in town.
+                        </p>
+
+                        <!-- Feature List -->
+                        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 35px; background-color: rgba(255,255,255,0.03); border-radius: 16px; padding: 25px;">
+                            <tr>
+                                <td style="color: #ffffff; font-size: 15px; padding-bottom: 15px; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.05);">What's next?</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #d1d1d6; font-size: 14px; padding: 15px 0 8px 0; font-weight: 400;">🎬 &nbsp; Browse currently showing movies</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #d1d1d6; font-size: 14px; padding: 8px 0; font-weight: 400;">🎟️ &nbsp; Pick your favorite seats</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #d1d1d6; font-size: 14px; padding: 8px 0 0 0; font-weight: 400;">🥤 &nbsp; Pre-order snacks & skip the queue</td>
+                            </tr>
+                        </table>
+
+                        <!-- CTA Button -->
+                        <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                            <tr>
+                                <td align="center">
+                                    <a th:href="${loginUrl}"
+                                       style="display: inline-block; background-color: #f84565; color: #ffffff; padding: 16px 40px; border-radius: 50px; text-decoration: none; font-weight: 600; font-size: 16px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(248, 69, 101, 0.3);">
+                                        Explore Movies Now
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- Security Note -->
+                <tr>
+                    <td style="padding: 10px 40px 40px 40px;">
+                        <p style="color: #52525b; font-size: 12px; text-align: center; margin: 0; font-weight: 300;">
+                            Did not create this account? <a href="#" style="color: #71717a; text-decoration: underline;">Let us know</a> and we'll fix it.
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                    <td align="center" style="padding: 35px; background-color: rgba(0,0,0,0.2); border-top: 1px solid #27272a;">
+                        <p style="margin: 0; color: #71717a; font-size: 12px; font-weight: 300; line-height: 1.5;">
+                            © 2026 Cinema Booking Inc. <br>
+                            123 Movie Lane, Hollywood, CA 90210
+                        </p>
+                        <div style="margin-top: 20px;">
+                            <a href="#" style="color: #f84565; text-decoration: none; margin: 0 12px; font-size: 13px; font-weight: 400;">Facebook</a>
+                            <a href="#" style="color: #f84565; text-decoration: none; margin: 0 12px; font-size: 13px; font-weight: 400;">Instagram</a>
+                            <a href="#" style="color: #f84565; text-decoration: none; margin: 0 12px; font-size: 13px; font-weight: 400;">Twitter</a>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- Unsubscribe Section -->
+            <p style="margin-top: 25px; color: #52525b; font-size: 11px; text-align: center; font-weight: 300; line-height: 1.6;">
+                You received this email because you registered at cinemabooking.com. <br>
+                <a href="#" style="color: #71717a; text-decoration: none; border-bottom: 1px solid #3f3f46;">Email Preferences</a> &nbsp;|&nbsp; <a href="#" style="color: #71717a; text-decoration: none; border-bottom: 1px solid #3f3f46;">Unsubscribe</a>
+            </p>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
