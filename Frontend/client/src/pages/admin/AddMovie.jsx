@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import Title from '../../components/admin/Title'
+import { useAuth } from '../../context/AuthContext'
+import { createMovie } from '../../lib/movieApi'
 
-const ageRatingOptions = ['P', 'K', 'T13', 'T16', 'T18', 'C']
+const ageRatingOptions = ['G', 'PG', 'PG13', 'R', 'NC17']
 const movieStatusOptions = ['COMING_SOON', 'NOW_SHOWING', 'ENDED']
 const movieGenreOptions = [
   'ACTION',
@@ -27,11 +29,17 @@ const initialMovieForm = {
   status: '',
   genre: '',
   duration_minutes: '',
+  trailerUrl: '',
 }
 
 const AddMovie = () => {
+  const { token } = useAuth()
+
   const [formData, setFormData] = useState(initialMovieForm)
   const [submittedMovie, setSubmittedMovie] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [submitSuccess, setSubmitSuccess] = useState('')
 
   const canSubmit = useMemo(() => {
     return (
@@ -41,7 +49,8 @@ const AddMovie = () => {
       formData.release_date &&
       formData.status &&
       formData.genre &&
-      Number(formData.duration_minutes) > 0
+      Number(formData.duration_minutes) > 0 &&
+      formData.trailerUrl
     )
   }, [formData])
 
@@ -49,18 +58,40 @@ const AddMovie = () => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    if (!canSubmit) return
 
-    const now = new Date().toISOString()
-    setSubmittedMovie({
-      ...formData,
-      movie_id: formData.movie_id || `generated-at-api`,
-      created_at: now,
-      updated_at: null,
-      duration_minutes: Number(formData.duration_minutes),
-    })
+    if (!canSubmit || isSubmitting) return
+
+    setSubmitError('')
+    setSubmitSuccess('')
+    setSubmittedMovie(null)
+
+    try {
+      setIsSubmitting(true)
+
+      const payload = {
+        ...(formData.movie_id ? { movie_id: formData.movie_id } : {}),
+        title: formData.title,
+        description: formData.description,
+        age_rating: formData.age_rating,
+        release_date: formData.release_date,
+        status: formData.status,
+        genre: formData.genre,
+        duration_minutes: Number(formData.duration_minutes),
+        trailerUrl: formData.trailerUrl,
+      }
+
+      const response = await createMovie(payload, token)
+
+      setSubmittedMovie(response)
+      setSubmitSuccess('Movie created successfully.')
+      setFormData(initialMovieForm)
+    } catch (error) {
+      setSubmitError(error.message || 'Unable to create movie.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -68,7 +99,7 @@ const AddMovie = () => {
       <Title text1='Add' text2='Movie' />
 
       <div className='rounded-xl border border-primary/20 bg-primary/10 p-4 text-sm text-gray-300'>
-        Static prototype form for `Movies` entity. No API call yet.
+        Create a new movie and submit it to backend API.
       </div>
 
       <form onSubmit={handleSubmit} className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
@@ -177,20 +208,39 @@ const AddMovie = () => {
           />
         </div>
 
-        <div className='lg:col-span-2'>
+        <div className='space-y-2 lg:col-span-2'>
+          <label className='text-sm text-gray-300'>trailerUrl *</label>
+          <input
+            value={formData.trailerUrl}
+            onChange={(e) => handleChange('trailerUrl', e.target.value)}
+            placeholder='https://www.youtube.com/watch?v=...'
+            className='w-full rounded-md bg-black/30 border border-white/15 px-3 py-2 outline-none'
+            required
+          />
+        </div>
+
+        <div className='lg:col-span-2 space-y-2'>
+          {submitError && (
+            <p className='text-sm text-red-400'>{submitError}</p>
+          )}
+
+          {submitSuccess && (
+            <p className='text-sm text-green-400'>{submitSuccess}</p>
+          )}
+
           <button
             type='submit'
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
             className='cursor-pointer px-4 py-2 rounded-md bg-primary text-black font-medium hover:opacity-90 transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
           >
-            Save Mock Movie
+            {isSubmitting ? 'Creating movie...' : 'Create Movie'}
           </button>
         </div>
       </form>
 
       {submittedMovie && (
         <div className='rounded-xl border border-primary/20 bg-primary/10 p-4'>
-          <p className='font-medium mb-3'>Mock payload preview</p>
+          <p className='font-medium mb-3'>Backend response preview</p>
           <pre className='text-xs whitespace-pre-wrap break-all bg-black/30 p-3 rounded-md border border-white/10'>
             {JSON.stringify(submittedMovie, null, 2)}
           </pre>

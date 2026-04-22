@@ -1,88 +1,244 @@
-import { ChartLineIcon, CircleDollarSignIcon, PlayCircleIcon, StarIcon, UserIcon } from 'lucide-react'
-import React, { useEffect } from 'react'
-import { dummyDashboardData } from '../../assets/assets'
-import Loading from '../../components/Loading'
+import React, { useEffect, useMemo, useState } from 'react'
 import Title from '../../components/admin/Title'
-import BlurCircle from '../../components/BlurCircle'
-import { dateFormat } from '../../lib/dateFormat'
+import { useAuth } from '../../context/AuthContext'
+import {
+  getAllBookings,
+  getAllMoviesForAdmin,
+  getAllShowtimesForAdmin,
+  getAllTickets,
+  getAllUsers,
+} from '../../lib/adminManagementApi'
+
+const formatCurrency = (value) => {
+  const numericValue = Number(value || 0)
+
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(numericValue)
+}
+
+const formatNumber = (value) => {
+  return new Intl.NumberFormat('en-US').format(Number(value || 0))
+}
+
+const DashboardCard = ({ title, value, subtitle }) => {
+  return (
+    <div className='rounded-xl border border-primary/20 bg-primary/10 p-5'>
+      <p className='text-sm text-gray-400'>{title}</p>
+      <h3 className='mt-2 text-3xl font-bold text-white'>{value}</h3>
+      {subtitle ? <p className='mt-2 text-xs text-gray-500'>{subtitle}</p> : null}
+    </div>
+  )
+}
 
 const Dashboard = () => {
+  const { token } = useAuth()
 
-  const currency = 'VNĐ'
-  
-  const [dashboardData, setDashboardData] = React.useState({
-    totalBookings: 0,
-    totalRevenue: 0,
-    activeShows: [],
-    totalUser: 0
-  })
-
-  const [loading, setLoading] = React.useState(true)
-
-  const dashboardCards = [
-    {title: "Total Bookings", value: dashboardData.totalBookings || "0", icon:ChartLineIcon},
-    {title: "Total Revenue", value: dashboardData.totalRevenue + " " +currency|| "0", icon: CircleDollarSignIcon},
-    {title: "Active Shows", value: dashboardData.activeShows.length || "0", icon: PlayCircleIcon},
-    {title: "Total Users", value: dashboardData.totalUser || "0", icon: UserIcon},
-  ]
-
-  const fetchDashboardData = async() => {
-    setDashboardData(dummyDashboardData)
-    setLoading(false)
-  }
+  const [movies, setMovies] = useState([])
+  const [showtimes, setShowtimes] = useState([])
+  const [bookings, setBookings] = useState([])
+  const [users, setUsers] = useState([])
+  const [tickets, setTickets] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [moviesData, showtimesData, bookingsData, usersData, ticketsData] =
+          await Promise.all([
+            getAllMoviesForAdmin(token),
+            getAllShowtimesForAdmin(token),
+            getAllBookings(token),
+            getAllUsers(token),
+            getAllTickets(token),
+          ])
+
+        setMovies(Array.isArray(moviesData) ? moviesData : [])
+        setShowtimes(Array.isArray(showtimesData) ? showtimesData : [])
+        setBookings(Array.isArray(bookingsData) ? bookingsData : [])
+        setUsers(Array.isArray(usersData) ? usersData : [])
+        setTickets(Array.isArray(ticketsData) ? ticketsData : [])
+      } catch (err) {
+        setError(err.message || 'Failed to load dashboard data.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
     fetchDashboardData()
-  }, []);
-  return !loading ? (
-    <>
-        <Title text1="Admin" text2="Dashboard"/>
+  }, [token])
 
-        <div className='relative flex flex-wrap gap-4 mt-6'>
-            <BlurCircle top="-100px" left='0'/>
-            <div className='flex flex-wrap gap-4 w-full'>
-                {dashboardCards.map((card, index) => (
-                    <div key={index} className='flex items-center
-                    justify-between px-4 py-3 bg-primary/10 border
-                    border-primary/20 rounded-md max-w-50 w-full'>
-                        <div>
-                            <h1 className='text-sm'>{card.title}</h1>
-                            <p className='text-xl font-medium mt-1'>{card.value}</p>
-                        </div>
-                        <card.icon className='w-6 h-6'/>
-                    </div>
-                ))}
+  const metrics = useMemo(() => {
+    const normalizedBookings = bookings.map((booking) => {
+      const totalPrice = booking.total_price ?? booking.totalPrice ?? 0
+      const bookingStatus =
+        booking.booking_status ??
+        booking.bookingStatus ??
+        booking.status ??
+        ''
 
-            </div>
+      return {
+        totalPrice: Number(totalPrice || 0),
+        bookingStatus: String(bookingStatus).toUpperCase(),
+      }
+    })
+
+    const totalRevenue = normalizedBookings
+      .filter(
+        (booking) =>
+          booking.bookingStatus === 'PAID' ||
+          booking.bookingStatus === 'CONFIRMED'
+      )
+      .reduce((sum, booking) => sum + booking.totalPrice, 0)
+
+    const pendingBookings = normalizedBookings.filter(
+      (booking) => booking.bookingStatus === 'PENDING'
+    ).length
+
+    const paidOrConfirmedBookings = normalizedBookings.filter(
+      (booking) =>
+        booking.bookingStatus === 'PAID' ||
+        booking.bookingStatus === 'CONFIRMED'
+    ).length
+
+    const activeUsers = users.filter((user) => {
+      const status = String(user.status ?? '').toUpperCase()
+      return status === 'ACTIVE' || status === 'ENABLED' || status === '1'
+    }).length
+
+    const scheduledShowtimes = showtimes.filter((showtime) => {
+      const status = String(showtime.status ?? '').toUpperCase()
+      return status === 'SCHEDULED'
+    }).length
+
+    return {
+      totalMovies: movies.length,
+      totalShowtimes: showtimes.length,
+      scheduledShowtimes,
+      totalBookings: bookings.length,
+      pendingBookings,
+      paidOrConfirmedBookings,
+      totalUsers: users.length,
+      activeUsers,
+      totalTickets: tickets.length,
+      totalRevenue,
+    }
+  }, [bookings, movies, showtimes, tickets, users])
+
+  return (
+    <div className='space-y-6'>
+      <Title text1='Admin' text2='Dashboard' />
+
+      {loading && (
+        <div className='rounded-xl border border-primary/20 bg-primary/10 p-4 text-sm text-gray-300'>
+          Loading dashboard...
         </div>
+      )}
 
-        <p className='mt-10 text-lg font-medium'>Active Show</p>
+      {error && (
+        <div className='rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300'>
+          {error}
+        </div>
+      )}
 
-        <div className='relative flex flex-wrap gap-6 mt-4 max-w-5xl'>
-            <BlurCircle top='100px' left='-10%'/>
-            {dashboardData.activeShows.map((show) => (
-                <div key={show._id} className='w-55 rounded-lg overflow-hidden
-                h-full pb-3 bg-primary/10 border border-primary/20
-                hover:-translate-y-1 transition duration-300'>
-                    <img src={show.movie.poster_path} alt="" className='h-60
-                    w-full object-cover' />
-                    <p className='font-medium p-2 truncate'>{show.movie.title}</p>
-                    <div className='flex items-center justify-between px-2'>
-                        <p className='text-lg font-medium'>{show.showPrice} {currency}</p>
-                        <p className='flex items-center gap-1 text-sm
-                        text-gray-400 mt-1 pr-1'>
-                            <StarIcon className='w-4 h-4 text-primary
-                            fill-primary'/>
-                            {show.movie.vote_average.toFixed(1)}
-                        </p>
-                    </div>
-                    <p className='px-2 pt-2 text-sm text-gray-500'>{dateFormat(show.showDateTime)}</p>
+      {!loading && !error && (
+        <>
+          <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4'>
+            <DashboardCard
+              title='Total Movies'
+              value={formatNumber(metrics.totalMovies)}
+              subtitle='Movies currently stored in the system'
+            />
+            <DashboardCard
+              title='Total Showtimes'
+              value={formatNumber(metrics.totalShowtimes)}
+              subtitle={`Scheduled: ${formatNumber(metrics.scheduledShowtimes)}`}
+            />
+            <DashboardCard
+              title='Total Bookings'
+              value={formatNumber(metrics.totalBookings)}
+              subtitle={`Pending: ${formatNumber(metrics.pendingBookings)}`}
+            />
+            <DashboardCard
+              title='Total Users'
+              value={formatNumber(metrics.totalUsers)}
+              subtitle={`Active: ${formatNumber(metrics.activeUsers)}`}
+            />
+            <DashboardCard
+              title='Total Tickets'
+              value={formatNumber(metrics.totalTickets)}
+              subtitle='Issued tickets in the system'
+            />
+            <DashboardCard
+              title='Revenue'
+              value={formatCurrency(metrics.totalRevenue)}
+              subtitle={`Paid/Confirmed bookings: ${formatNumber(metrics.paidOrConfirmedBookings)}`}
+            />
+          </div>
+
+          <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+            <div className='rounded-xl border border-primary/20 bg-primary/10 p-5'>
+              <h3 className='text-lg font-semibold text-white'>Quick Summary</h3>
+              <div className='mt-4 space-y-3 text-sm'>
+                <div className='flex items-center justify-between border-b border-white/10 pb-2'>
+                  <span className='text-gray-400'>Movies</span>
+                  <span>{formatNumber(metrics.totalMovies)}</span>
                 </div>
-            ))}
+                <div className='flex items-center justify-between border-b border-white/10 pb-2'>
+                  <span className='text-gray-400'>Showtimes</span>
+                  <span>{formatNumber(metrics.totalShowtimes)}</span>
+                </div>
+                <div className='flex items-center justify-between border-b border-white/10 pb-2'>
+                  <span className='text-gray-400'>Bookings</span>
+                  <span>{formatNumber(metrics.totalBookings)}</span>
+                </div>
+                <div className='flex items-center justify-between border-b border-white/10 pb-2'>
+                  <span className='text-gray-400'>Users</span>
+                  <span>{formatNumber(metrics.totalUsers)}</span>
+                </div>
+                <div className='flex items-center justify-between border-b border-white/10 pb-2'>
+                  <span className='text-gray-400'>Tickets</span>
+                  <span>{formatNumber(metrics.totalTickets)}</span>
+                </div>
+                <div className='flex items-center justify-between'>
+                  <span className='text-gray-400'>Revenue</span>
+                  <span>{formatCurrency(metrics.totalRevenue)}</span>
+                </div>
+              </div>
+            </div>
 
-        </div>
-    </>
-  ) : <Loading/>
+            <div className='rounded-xl border border-primary/20 bg-primary/10 p-5'>
+              <h3 className='text-lg font-semibold text-white'>Booking Overview</h3>
+              <div className='mt-4 space-y-3 text-sm'>
+                <div className='flex items-center justify-between border-b border-white/10 pb-2'>
+                  <span className='text-gray-400'>Pending Bookings</span>
+                  <span>{formatNumber(metrics.pendingBookings)}</span>
+                </div>
+                <div className='flex items-center justify-between border-b border-white/10 pb-2'>
+                  <span className='text-gray-400'>Paid / Confirmed</span>
+                  <span>{formatNumber(metrics.paidOrConfirmedBookings)}</span>
+                </div>
+                <div className='flex items-center justify-between border-b border-white/10 pb-2'>
+                  <span className='text-gray-400'>Scheduled Showtimes</span>
+                  <span>{formatNumber(metrics.scheduledShowtimes)}</span>
+                </div>
+                <div className='flex items-center justify-between'>
+                  <span className='text-gray-400'>Active Users</span>
+                  <span>{formatNumber(metrics.activeUsers)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 export default Dashboard

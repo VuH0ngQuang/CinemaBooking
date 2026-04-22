@@ -2,16 +2,29 @@ import { useState } from "react"
 import { useAuth } from "../context/AuthContext"
 import { useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
+import { getUserByEmail, loginWithEmailPassword } from "../lib/authApi"
 
 const Login = () => {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   const { login } = useAuth()
   const navigate = useNavigate()
   const baseUrl = import.meta.env.VITE_BASE_URL
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setError("")
+
+    if (!email || !password) {
+      setError("Please enter both email and password.")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
 
     try {
       const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/login`, {
@@ -30,6 +43,18 @@ const Login = () => {
         const message = await response.text()
         throw new Error(message || "Login failed")
       }
+      const token = await loginWithEmailPassword({ email, password })
+      const userResponse = await getUserByEmail(email, token)
+
+      const normalizedUser = {
+        id: userResponse.user_id,
+        name: userResponse.full_name || userResponse.email,
+        email: userResponse.email,
+        role: userResponse.role,
+        status: userResponse.status,
+        full_name: userResponse.full_name,
+        user_id: userResponse.user_id,
+      }
 
       const token = await response.text()
       login({ email }, token ? "cookie-authenticated" : null)
@@ -37,6 +62,13 @@ const Login = () => {
       navigate("/")
     } catch (error) {
       toast.error(error.message || "Login failed")
+    }
+      login(normalizedUser, token)
+      navigate("/")
+    } catch (err) {
+      setError(err.message || "Login failed.")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -61,8 +93,14 @@ const Login = () => {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <button className="w-full bg-primary text-white py-2 rounded">
-          Login
+        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full bg-primary text-white py-2 rounded disabled:opacity-60"
+        >
+          {isSubmitting ? "Logging in..." : "Login"}
         </button>
       </form>
     </div>

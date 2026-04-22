@@ -2,6 +2,11 @@ import { useState } from "react"
 import { XIcon } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 import toast from "react-hot-toast"
+import {
+  getUserByEmail,
+  loginWithEmailPassword,
+  registerUser,
+} from "../lib/authApi"
 
 const AuthModal = ({ isOpen, onClose }) => {
   const [mode, setMode] = useState("login")
@@ -9,6 +14,13 @@ const AuthModal = ({ isOpen, onClose }) => {
   const [password, setPassword] = useState("")
   const [fullName, setFullName] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [error, setError] = useState("")
+  const [successMessage, setSuccessMessage] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   const { login } = useAuth()
   const baseUrl = import.meta.env.VITE_BASE_URL
 
@@ -23,6 +35,39 @@ const AuthModal = ({ isOpen, onClose }) => {
   const closeModal = () => {
     resetForm()
     onClose()
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setError("")
+    setSuccessMessage("")
+
+    if (!email || !password) {
+      setError("Please enter both email and password.")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+
+      const token = await loginWithEmailPassword({ email, password })
+      const userResponse = await getUserByEmail(email, token)
+
+      const normalizedUser = {
+        id: userResponse.user_id,
+        name: userResponse.full_name || userResponse.email,
+        email: userResponse.email,
+        role: userResponse.role,
+        status: userResponse.status,
+        full_name: userResponse.full_name,
+        user_id: userResponse.user_id,
+      }
+
+      login(normalizedUser, token)
+      onClose()
+    } catch (err) {
+      setError(err.message || "Login failed.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const fetchCurrentUser = async () => {
@@ -36,6 +81,7 @@ const AuthModal = ({ isOpen, onClose }) => {
   }
 
   const handleLogin = async (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault()
     if (!baseUrl) {
       toast.error("VITE_BASE_URL is not configured")
@@ -121,6 +167,31 @@ const AuthModal = ({ isOpen, onClose }) => {
     } finally {
       setIsSubmitting(false)
     }
+    setError("")
+    setSuccessMessage("")
+
+    if (!fullName || !email || !password) {
+      setError("Please fill in all fields.")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+
+      await registerUser({
+        email,
+        password,
+        full_name: fullName,
+      })
+
+      setSuccessMessage("Account created successfully. Please log in.")
+      setMode("login")
+      setPassword("")
+    } catch (err) {
+      setError(err.message || "Signup failed.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const inputClass =
@@ -130,7 +201,6 @@ const AuthModal = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-white rounded-lg w-96 p-6 relative">
-
         <XIcon
           className="absolute top-4 right-4 cursor-pointer text-black"
           onClick={closeModal}
@@ -148,6 +218,8 @@ const AuthModal = ({ isOpen, onClose }) => {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
               <input
                 type="password"
@@ -156,9 +228,27 @@ const AuthModal = ({ isOpen, onClose }) => {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
 
               <button disabled={isSubmitting} className="w-full bg-primary text-white py-2 rounded cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+                {isSubmitting ? "Logging in..." : "Login"}
+              {error && (
+                <p className="mb-3 text-sm text-red-600">{error}</p>
+              )}
+
+              {successMessage && (
+                <p className="mb-3 text-sm text-green-600">
+                  {successMessage}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-primary text-white py-2 rounded cursor-pointer disabled:opacity-60"
+              >
                 {isSubmitting ? "Logging in..." : "Login"}
               </button>
             </form>
@@ -170,6 +260,11 @@ const AuthModal = ({ isOpen, onClose }) => {
                 onClick={() => {
                   setMode("signup")
                   setPassword("")
+                }}
+                onClick={() => {
+                  setMode("signup")
+                  setError("")
+                  setSuccessMessage("")
                 }}
               >
                 Sign up
@@ -186,6 +281,8 @@ const AuthModal = ({ isOpen, onClose }) => {
                 placeholder="Name"
                 className={inputClass}
                 value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
                 required
               />
@@ -196,6 +293,8 @@ const AuthModal = ({ isOpen, onClose }) => {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
               <input
                 type="password"
@@ -204,10 +303,28 @@ const AuthModal = ({ isOpen, onClose }) => {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
 
               <button disabled={isSubmitting} className="w-full bg-primary text-white py-2 rounded cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
                 {isSubmitting ? "Creating..." : "Create account"}
+              {error && (
+                <p className="mb-3 text-sm text-red-600">{error}</p>
+              )}
+
+              {successMessage && (
+                <p className="mb-3 text-sm text-green-600">
+                  {successMessage}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-primary text-white py-2 rounded cursor-pointer disabled:opacity-60"
+              >
+                {isSubmitting ? "Creating account..." : "Create account"}
               </button>
             </form>
 
@@ -218,6 +335,11 @@ const AuthModal = ({ isOpen, onClose }) => {
                 onClick={() => {
                   setMode("login")
                   setFullName("")
+                }}
+                onClick={() => {
+                  setMode("login")
+                  setError("")
+                  setSuccessMessage("")
                 }}
               >
                 Login

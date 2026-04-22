@@ -224,6 +224,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         dto.setBuffer_time(showtime.getBuffer_time());
         dto.setMovie_id(showtime.getMovie() != null ? showtime.getMovie().getMovie_id() : null);
         dto.setScreening_room_id(showtime.getScreeningRoom() != null ? showtime.getScreeningRoom().getRoom_id() : null);
+        dto.setSeat_price(showtime.getSeat_price());
 
         return dto;
     }
