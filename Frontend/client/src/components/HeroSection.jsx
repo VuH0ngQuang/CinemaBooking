@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, CalendarIcon, ClockIcon } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import {
+  MOVIES_CACHE_UPDATED_EVENT,
+  readMoviesFromCache,
+} from '../utils/moviesCache.js'
 
 const FALLBACK_IMAGE_URL = "https://minio.vuhongquang.com/cinemabooking/poster/horizontal/536046992.jpg"
 const SLIDE_INTERVAL_MS = 3000
@@ -21,18 +25,16 @@ const HeroSection = () => {
   const fadeTimeoutRef = useRef(null)
 
   useEffect(() => {
-    try {
-      const savedMovies = localStorage.getItem('movies')
-      if (!savedMovies) {
-        return
-      }
+    const syncMovies = () => {
+      const nextMovies = readMoviesFromCache()
+      setMovies(nextMovies)
+    }
 
-      const parsedMovies = JSON.parse(savedMovies)
-      if (Array.isArray(parsedMovies) && parsedMovies.length > 0) {
-        setMovies(parsedMovies)
-      }
-    } catch (error) {
-      console.error('Failed to parse movies from localStorage:', error)
+    syncMovies()
+    window.addEventListener(MOVIES_CACHE_UPDATED_EVENT, syncMovies)
+
+    return () => {
+      window.removeEventListener(MOVIES_CACHE_UPDATED_EVENT, syncMovies)
     }
   }, [])
 

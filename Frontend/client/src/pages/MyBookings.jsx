@@ -42,13 +42,7 @@ const MyBookings = () => {
       }
 
       const data = await response.json()
-
-      const validBookings = (data || []).filter((b) => {
-        const status = b.bookingStatus || b.booking_status
-        return ['PAID', 'CONFIRMED'].includes(status)
-      })
-
-      setBookings(validBookings)
+      setBookings(data || [])
     } catch (error) {
       console.error('Failed to load bookings:', error)
       toast.error(error.message || 'Failed to load bookings')

@@ -21,6 +21,7 @@
     "vite": "^7.3.2"
   },
   "dependencies": {
+    "@payos/payos-checkout": "^1.0.8",
     "@tailwindcss/vite": "^4.1.18",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.8.0",

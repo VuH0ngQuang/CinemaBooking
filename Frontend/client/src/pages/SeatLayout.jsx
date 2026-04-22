@@ -50,6 +50,46 @@ const addSeatToBooking = async (bookingId, seatId, token, baseUrl) => {
   return response.json()
 }
 
+const removeSeatFromBooking = async (bookingId, seatId, token, baseUrl) => {
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/booking-seats`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      bookingId,
+      seatId,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(errorText || 'Remove seat failed')
+  }
+}
+
+const getShowtimeSeatStatuses = async (showtimeId, bookingId, token, baseUrl) => {
+  const params = new URLSearchParams()
+  if (bookingId) params.set('bookingId', bookingId)
+
+  const response = await fetch(
+    `${baseUrl.replace(/\/$/, '')}/api/showtimes/${showtimeId}/seats/status?${params.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(errorText || 'Load seat statuses failed')
+  }
+
+  return response.json()
+}
+
 const resolveSeatActive = (seat) => {
   const candidates = [
     seat?._active,
@@ -67,10 +107,14 @@ const SeatLayout = () => {
   const baseUrl = import.meta.env.VITE_BASE_URL
 
   const [selectedSeats, setSelectedSeats] = React.useState([])
+  const [selectedSeatIds, setSelectedSeatIds] = React.useState([])
   const [selectedTime, setSelectedTime] = React.useState(null)
   const [showtimesForDate, setShowtimesForDate] = React.useState([])
   const [screeningRoom, setScreeningRoom] = React.useState(null)
   const [roomSeats, setRoomSeats] = React.useState([])
+  const [seatStatusBySeatId, setSeatStatusBySeatId] = React.useState({})
+  const [bookingId, setBookingId] = React.useState(null)
+  const [isPreparingBooking, setIsPreparingBooking] = React.useState(false)
   const [isLoadingRoom, setIsLoadingRoom] = React.useState(false)
   const [isLoadingSeats, setIsLoadingSeats] = React.useState(false)
   const [isSubmittingBooking, setIsSubmittingBooking] = React.useState(false)
@@ -83,6 +127,34 @@ const SeatLayout = () => {
     toast('Please login or register first')
     openAuthModal()
     return false
+  }
+
+  const selectedShowtime = useMemo(() => {
+    return showtimesForDate.find((showtime) => showtime.start_time === selectedTime) || null
+  }, [showtimesForDate, selectedTime])
+
+  const refreshSeatStatuses = async (currentBookingId = bookingId) => {
+    if (!selectedShowtime || !currentBookingId || !token || !baseUrl) return
+
+    const statuses = await getShowtimeSeatStatuses(
+      selectedShowtime.showtime_id,
+      currentBookingId,
+      token,
+      baseUrl
+    )
+
+    const nextStatusMap = {}
+    const nextSelectedSeatIds = []
+
+    statuses.forEach((status) => {
+      nextStatusMap[status.seatId] = status
+      if (status.selectedByCurrentBooking) {
+        nextSelectedSeatIds.push(status.seatId)
+      }
+    })
+
+    setSeatStatusBySeatId(nextStatusMap)
+    setSelectedSeatIds(nextSelectedSeatIds)
   }
 
   useEffect(() => {
@@ -107,6 +179,9 @@ const SeatLayout = () => {
       setShowtimesForDate(dateShowtimes)
       setSelectedTime(null)
       setSelectedSeats([])
+      setSelectedSeatIds([])
+      setSeatStatusBySeatId({})
+      setBookingId(null)
       setScreeningRoom(null)
       setRoomSeats([])
     } catch (error) {
@@ -116,20 +191,80 @@ const SeatLayout = () => {
   }, [id, date])
 
   useEffect(() => {
+    if (!selectedShowtime || !token || !baseUrl) return
+
+    let cancelled = false
+
+    const prepareBookingAndSeatStatuses = async () => {
+      try {
+        const user = JSON.parse(localStorage.getItem('user'))
+        if (!user?.user_id) {
+          toast.error('User id not found')
+          return
+        }
+
+        setIsPreparingBooking(true)
+        const booking = await createBooking(user.user_id, selectedShowtime.showtime_id, token, baseUrl)
+        const resolvedBookingId = booking.bookingId || booking.booking_id
+
+        if (!resolvedBookingId) {
+          throw new Error('Booking id not found in response')
+        }
+
+        const statuses = await getShowtimeSeatStatuses(
+          selectedShowtime.showtime_id,
+          resolvedBookingId,
+          token,
+          baseUrl
+        )
+
+        if (cancelled) return
+
+        const nextStatusMap = {}
+        const nextSelectedSeatIds = []
+        statuses.forEach((status) => {
+          nextStatusMap[status.seatId] = status
+          if (status.selectedByCurrentBooking) {
+            nextSelectedSeatIds.push(status.seatId)
+          }
+        })
+
+        setBookingId(resolvedBookingId)
+        setSeatStatusBySeatId(nextStatusMap)
+        setSelectedSeatIds(nextSelectedSeatIds)
+      } catch (error) {
+        console.error('Failed to prepare booking for selected time:', error)
+        if (!cancelled) {
+          setBookingId(null)
+          setSeatStatusBySeatId({})
+          setSelectedSeatIds([])
+          toast.error(error.message || 'Failed to prepare booking')
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPreparingBooking(false)
+        }
+      }
+    }
+
+    prepareBookingAndSeatStatuses()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedShowtime, token, baseUrl])
+
+  useEffect(() => {
     if (!selectedTime || !baseUrl) return
 
-    const selectedShowtime = showtimesForDate.find((showtime) => showtime.start_time === selectedTime)
+    const selectedShowtimeByTime = showtimesForDate.find((showtime) => showtime.start_time === selectedTime)
 
     const roomId =
-      selectedShowtime?.screening_room_id ??
-      selectedShowtime?.room_id ??
-      selectedShowtime?.screeningRoomId
-
-    console.log('Selected showtime:', selectedShowtime)
-    console.log('Resolved roomId:', roomId)
+      selectedShowtimeByTime?.screening_room_id ??
+      selectedShowtimeByTime?.room_id ??
+      selectedShowtimeByTime?.screeningRoomId
 
     if (!roomId) {
-      console.error('Room id not found from selected showtime')
       setScreeningRoom(null)
       setRoomSeats([])
       return
@@ -164,7 +299,6 @@ const SeatLayout = () => {
           localStorage.setItem(`screening_room_${roomId}`, JSON.stringify(room))
         }
 
-        console.log('Fetched screening room:', room)
         setScreeningRoom(room)
 
         const seatsResponse = await fetch(
@@ -176,7 +310,6 @@ const SeatLayout = () => {
         }
 
         const seats = await seatsResponse.json()
-        console.log('Fetched room seats:', seats)
 
         if (Array.isArray(seats)) {
           const normalizedSeats = seats.map((seat) => ({
@@ -188,17 +321,10 @@ const SeatLayout = () => {
             is_active: resolveSeatActive(seat),
           }))
 
-          console.log('Normalized room seats:', normalizedSeats)
-          console.log('First normalized seat:', normalizedSeats[0])
-          console.table(normalizedSeats.slice(0, 5))
-
           setRoomSeats(normalizedSeats)
         } else {
-          console.error('Seats response is not array:', seats)
           setRoomSeats([])
         }
-
-        setSelectedSeats([])
       } catch (error) {
         console.error('Failed to fetch room or seats:', error)
         setScreeningRoom(null)
@@ -212,9 +338,15 @@ const SeatLayout = () => {
     fetchRoomAndSeats()
   }, [selectedTime, showtimesForDate, baseUrl])
 
-  const selectedShowtime = useMemo(() => {
-    return showtimesForDate.find((showtime) => showtime.start_time === selectedTime) || null
-  }, [showtimesForDate, selectedTime])
+  useEffect(() => {
+    if (!roomSeats.length || !selectedSeatIds.length) {
+      setSelectedSeats([])
+      return
+    }
+
+    const selectedSet = new Set(selectedSeatIds)
+    setSelectedSeats(roomSeats.filter((seat) => selectedSet.has(seat.seat_id)))
+  }, [roomSeats, selectedSeatIds])
 
   const groupedSeats = useMemo(() => {
     const grouped = {}
@@ -239,15 +371,21 @@ const SeatLayout = () => {
   }, [groupedSeats])
 
   const isRealSeatSelected = (seatId) => {
-    return selectedSeats.some((seat) => seat.seat_id === seatId)
+    return selectedSeatIds.includes(seatId)
   }
 
-  const handleRealSeatClick = (seat) => {
+  const handleRealSeatClick = async (seat) => {
     if (!requireAuth()) return
 
     if (!selectedTime) {
       return toast('Please select a time slot first')
     }
+
+    if (!bookingId) {
+      return toast('Preparing booking... please wait')
+    }
+
+    if (isPreparingBooking || isSubmittingBooking) return
 
     const seatActive = resolveSeatActive(seat)
 
@@ -255,18 +393,39 @@ const SeatLayout = () => {
       return toast('This seat is inactive')
     }
 
-    const alreadySelected = selectedSeats.some((selectedSeat) => selectedSeat.seat_id === seat.seat_id)
+    const seatStatus = seatStatusBySeatId[seat.seat_id]
+    const selectedByCurrentBooking = Boolean(seatStatus?.selectedByCurrentBooking)
+    const unavailableForCurrentUser =
+      seatStatus &&
+      (seatStatus.status === 'BOOKED' || (seatStatus.status === 'HELD' && !selectedByCurrentBooking))
 
-    if (!alreadySelected && selectedSeats.length > 4) {
+    if (unavailableForCurrentUser) {
+      return toast('This seat is already selected by another user')
+    }
+
+    const alreadySelected = selectedByCurrentBooking || selectedSeatIds.includes(seat.seat_id)
+
+    if (!alreadySelected && selectedSeatIds.length > 4) {
       return toast('You can select maximum 5 seats')
     }
 
-    setSelectedSeats((prev) => {
-      if (prev.some((selectedSeat) => selectedSeat.seat_id === seat.seat_id)) {
-        return prev.filter((selectedSeat) => selectedSeat.seat_id !== seat.seat_id)
+    try {
+      if (alreadySelected) {
+        await removeSeatFromBooking(bookingId, seat.seat_id, token, baseUrl)
+      } else {
+        await addSeatToBooking(bookingId, seat.seat_id, token, baseUrl)
       }
-      return [...prev, seat]
-    })
+
+      await refreshSeatStatuses(bookingId)
+    } catch (error) {
+      console.error('Seat lock/unlock failed:', error)
+      toast.error(error.message || 'Seat action failed')
+      try {
+        await refreshSeatStatuses(bookingId)
+      } catch (refreshError) {
+        console.error('Failed to refresh seat statuses:', refreshError)
+      }
+    }
   }
 
   const handleBooking = async () => {
@@ -281,40 +440,16 @@ const SeatLayout = () => {
         return toast('Please select time first')
       }
 
-      if (selectedSeats.length === 0) {
+      if (selectedSeatIds.length === 0) {
         return toast('Please select at least 1 seat')
-      }
-
-      const user = JSON.parse(localStorage.getItem('user'))
-      if (!user) {
-        return toast('User not found')
-      }
-
-      const userId = user.user_id
-      const showtimeId = selectedShowtime.showtime_id
-
-      if (!userId) {
-        return toast.error('User id not found')
-      }
-
-      if (!showtimeId) {
-        return toast.error('Showtime id not found')
       }
 
       setIsSubmittingBooking(true)
 
-      const booking = await createBooking(userId, showtimeId, token, baseUrl)
-      const bookingId = booking.bookingId || booking.booking_id
-
       if (!bookingId) {
-        throw new Error('Booking id not found in response')
+        throw new Error('Booking is not ready yet')
       }
 
-      for (const seat of selectedSeats) {
-        await addSeatToBooking(bookingId, seat.seat_id, token, baseUrl)
-      }
-
-      toast.success('Booking created successfully!')
       navigate(`/payment/${bookingId}`)
     } catch (error) {
       console.error('Booking failed:', error)
@@ -334,15 +469,23 @@ const SeatLayout = () => {
             const seatDisplay = `${seat.seat_label}${seat.seat_col}`
             const selected = isRealSeatSelected(seat.seat_id)
             const seatActive = resolveSeatActive(seat)
+            const seatStatus = seatStatusBySeatId[seat.seat_id]
+            const selectedByCurrentBooking = Boolean(seatStatus?.selectedByCurrentBooking)
+            const blockedByOthers =
+              seatStatus &&
+              (seatStatus.status === 'BOOKED' || (seatStatus.status === 'HELD' && !selectedByCurrentBooking))
+            const disabled = !seatActive || blockedByOthers || !bookingId || isPreparingBooking
 
             return (
               <button
                 key={seat.seat_id}
                 onClick={() => handleRealSeatClick(seat)}
-                disabled={!seatActive}
+                disabled={disabled}
                 className={`h-8 min-w-8 px-2 rounded border border-primary/60 cursor-pointer ${
                   selected ? 'bg-primary text-white' : ''
-                } ${!seatActive ? 'opacity-40 cursor-not-allowed' : ''}`}
+                } ${blockedByOthers ? 'bg-red-600 text-white border-red-500 cursor-not-allowed' : ''} ${
+                  !seatActive ? 'opacity-40 cursor-not-allowed' : ''
+                } ${!bookingId || isPreparingBooking ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 {seatDisplay}
               </button>
@@ -370,6 +513,9 @@ const SeatLayout = () => {
               key={item.showtime_id}
               onClick={() => {
                 if (!requireAuth()) return
+                setSeatStatusBySeatId({})
+                setSelectedSeatIds([])
+                setBookingId(null)
                 setSelectedTime(item.start_time)
               }}
               className={`flex items-center gap-2 px-6 py-2 w-max rounded-r-md cursor-pointer transition ${
@@ -389,6 +535,20 @@ const SeatLayout = () => {
         <h1 className='text-2xl font-semibold mb-4'>Select your seat</h1>
         <img src={assets.screenImage} alt='screen' />
         <p className='text-gray-400 text-sm mb-6'>SCREEN SIDE</p>
+        <div className='flex items-center gap-4 mb-4 text-xs text-gray-300'>
+          <div className='flex items-center gap-2'>
+            <span className='w-3 h-3 rounded border border-primary/60' />
+            <span>Available</span>
+          </div>
+          <div className='flex items-center gap-2'>
+            <span className='w-3 h-3 rounded bg-primary border border-primary/60' />
+            <span>Your selection</span>
+          </div>
+          <div className='flex items-center gap-2'>
+            <span className='w-3 h-3 rounded bg-red-600 border border-red-500' />
+            <span>Unavailable</span>
+          </div>
+        </div>
 
         {isLoadingRoom || isLoadingSeats ? (
           <Loading />
@@ -402,19 +562,18 @@ const SeatLayout = () => {
 
         {selectedSeats.length > 0 && (
           <div className='mt-6 text-sm text-gray-300 text-center'>
-            Selected:{' '}
-            {selectedSeats.map((seat) => `${seat.seat_label}${seat.seat_col}`).join(', ')}
+            Selected: {selectedSeats.map((seat) => `${seat.seat_label}${seat.seat_col}`).join(', ')}
           </div>
         )}
 
         <button
           onClick={handleBooking}
-          disabled={isSubmittingBooking}
+          disabled={isSubmittingBooking || isPreparingBooking || !bookingId}
           className='flex items-center gap-1 mt-20 px-10 py-3 text-sm
                 bg-primary hover:bg-primary-dull transition rounded-full font-medium
                 cursor-pointer active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed'
         >
-          {isSubmittingBooking ? 'Processing...' : 'Proceed to Checkout'}
+          {isPreparingBooking ? 'Preparing...' : isSubmittingBooking ? 'Processing...' : 'Proceed to Checkout'}
           <ArrowRightIcon strokeWidth={3} className='w-4 h-4' />
         </button>
       </div>

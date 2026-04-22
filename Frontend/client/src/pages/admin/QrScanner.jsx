@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { QrReader } from 'react-qr-reader'
+import React, { useEffect, useRef, useState } from 'react'
+import jsQR from 'jsqr'
 import toast from 'react-hot-toast'
 import BlurCircle from '../../components/BlurCircle'
 import { useAuth } from '../../context/AuthContext'
@@ -13,6 +13,13 @@ const QrScanner = () => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [result, setResult] = useState(null)
   const [lastScannedValue, setLastScannedValue] = useState('')
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [cameraError, setCameraError] = useState('')
+
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  const streamRef = useRef(null)
+  const frameRef = useRef(null)
 
   const requireAuth = () => {
     if (token) return true
@@ -141,6 +148,82 @@ const QrScanner = () => {
     await handleValidate(String(resolvedCode))
   }
 
+  const stopCamera = () => {
+    if (frameRef.current) {
+      cancelAnimationFrame(frameRef.current)
+      frameRef.current = null
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+
+    setIsCameraActive(false)
+  }
+
+  const scanFrame = () => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+
+    if (!video || !canvas) return
+
+    if (video.readyState >= 2) {
+      const width = video.videoWidth
+      const height = video.videoHeight
+
+      if (width > 0 && height > 0) {
+        canvas.width = width
+        canvas.height = height
+        const context = canvas.getContext('2d', { willReadFrequently: true })
+
+        if (context) {
+          context.drawImage(video, 0, 0, width, height)
+          const imageData = context.getImageData(0, 0, width, height)
+          const code = jsQR(imageData.data, imageData.width, imageData.height)
+
+          if (code?.data) {
+            void handleScanResult(code.data)
+          }
+        }
+      }
+    }
+
+    if (isCameraActive) {
+      frameRef.current = requestAnimationFrame(scanFrame)
+    }
+  }
+
+  const startCamera = async () => {
+    setCameraError('')
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      })
+
+      streamRef.current = stream
+      setIsCameraActive(true)
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+      }
+
+      frameRef.current = requestAnimationFrame(scanFrame)
+    } catch {
+      setCameraError('Cannot access camera. Please grant camera permission and try again.')
+      setIsCameraActive(false)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      stopCamera()
+    }
+  }, [])
+
   return (
     <div className='relative px-6 md:px-10 lg:px-16 py-20 min-h-screen'>
       <BlurCircle top="-100px" left="-100px" />
@@ -155,22 +238,38 @@ const QrScanner = () => {
           <div className='bg-primary/10 border border-primary/20 rounded-2xl p-6'>
             <h2 className='text-lg font-semibold mb-4'>Scan QR</h2>
 
-            <div className='overflow-hidden rounded-xl border border-primary/20'>
-              <QrReader
-                constraints={{ facingMode: 'environment' }}
-                onResult={(result, error) => {
-                  if (result?.text) {
-                    handleScanResult(result.text)
-                  }
+            <div className='space-y-3'>
+              <div className='overflow-hidden rounded-xl border border-primary/20 bg-black/40 aspect-video'>
+                <video
+                  ref={videoRef}
+                  className='w-full h-full object-cover'
+                  muted
+                  playsInline
+                  autoPlay
+                />
+                <canvas ref={canvasRef} className='hidden' />
+              </div>
 
-                  if (error) {
-                    // không toast lỗi camera liên tục
-                    console.debug(error?.message)
-                  }
-                }}
-                containerStyle={{ width: '100%' }}
-                videoStyle={{ width: '100%' }}
-              />
+              <div className='flex gap-2'>
+                <button
+                  onClick={startCamera}
+                  disabled={isCameraActive}
+                  className='px-4 py-2 rounded-lg bg-primary text-black font-medium disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  Start Camera
+                </button>
+                <button
+                  onClick={stopCamera}
+                  disabled={!isCameraActive}
+                  className='px-4 py-2 rounded-lg border border-primary/20 disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  Stop Camera
+                </button>
+              </div>
+
+              {cameraError && (
+                <p className='text-sm text-red-400'>{cameraError}</p>
+              )}
             </div>
 
             <p className='text-xs text-gray-400 mt-4'>

@@ -25,6 +25,7 @@ import {
 } from './pages/admin/ManagementPages.jsx'
 import QrScanner from './pages/admin/QrScanner.jsx'
 import AddMovie from './pages/admin/AddMovie.jsx'
+import { notifyMoviesCacheUpdated } from './utils/moviesCache.js'
 
 
 const App = () => {
@@ -49,6 +50,7 @@ const App = () => {
 
         const movies = await response.json()
         localStorage.setItem('movies', JSON.stringify(movies))
+        notifyMoviesCacheUpdated()
       } catch (error) {
         console.error('Error fetching movies:', error)
       }
