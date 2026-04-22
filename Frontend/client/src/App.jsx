@@ -15,6 +15,7 @@ import Dashboard from './pages/admin/Dashboard.jsx'
 import AddShow from './pages/admin/AddShow.jsx'
 import ListShow from './pages/admin/ListShow.jsx'
 import ListBooking from './pages/admin/ListBooking.jsx'
+import PaymentPage from './pages/PaymentPage.jsx'
 import {
   BookingSeatManagement,
   CinemaManagement,
@@ -24,6 +25,7 @@ import {
 } from './pages/admin/ManagementPages.jsx'
 import QrScanner from './pages/admin/QrScanner.jsx'
 import AddMovie from './pages/admin/AddMovie.jsx'
+import { notifyMoviesCacheUpdated } from './utils/moviesCache.js'
 
 
 const App = () => {
@@ -48,6 +50,7 @@ const App = () => {
 
         const movies = await response.json()
         localStorage.setItem('movies', JSON.stringify(movies))
+        notifyMoviesCacheUpdated()
       } catch (error) {
         console.error('Error fetching movies:', error)
       }
@@ -68,6 +71,7 @@ const App = () => {
         <Route path='/my-bookings' element={<MyBookings/>}/>
         <Route path='/favorite' element={<Favourite/>}/>
         <Route path="/login" element={<Login />} />
+        <Route path='/payment/:bookingId' element={<PaymentPage/>}/>
         <Route path='/admin/*' element={<Layout/>}>
           <Route index element={<Dashboard/>}/>
           <Route path='add-shows' element={<AddShow/>}/>

@@ -3,6 +3,7 @@ package com.group10.cinemabooking.controller;
 import com.group10.cinemabooking.dtos.PaymentDto;
 import com.group10.cinemabooking.dtos.PaymentRequestDto;
 import com.group10.cinemabooking.services.PaymentService;
+import com.group10.cinemabooking.dtos.PaymentCheckoutResponseDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,9 +20,9 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping
-    public ResponseEntity<String> createPayment(@Valid @RequestBody PaymentRequestDto requestDto) {
-        String  checkoutUrl = paymentService.createPayment(requestDto);
-        return new ResponseEntity<>(checkoutUrl, HttpStatus.CREATED);
+    public ResponseEntity<PaymentCheckoutResponseDto> createPayment(@Valid @RequestBody PaymentRequestDto requestDto) {
+        PaymentCheckoutResponseDto response = paymentService.createPayment(requestDto);
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
     @GetMapping

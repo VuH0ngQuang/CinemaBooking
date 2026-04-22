@@ -5,6 +5,10 @@ import { Heart, PlayCircleIcon, X } from 'lucide-react'
 import DateSelect from '../components/DateSelect'
 import { useNavigate } from 'react-router-dom'
 import Loading from '../components/Loading'
+import {
+  MOVIES_CACHE_UPDATED_EVENT,
+  readMoviesFromCache,
+} from '../utils/moviesCache.js'
 
 const getYoutubeIdFromUrl = (url) => {
   if (!url) return null
@@ -45,25 +49,18 @@ const MovieDetails = () => {
   const baseUrl = import.meta.env.VITE_BASE_URL
 
   useEffect(() => {
-    try {
-      const savedMovies = localStorage.getItem('movies')
-      if (!savedMovies) {
-        setMovie(null)
-        return
-      }
-
-      const parsedMovies = JSON.parse(savedMovies)
-      if (!Array.isArray(parsedMovies)) {
-        setMovie(null)
-        return
-      }
-
+    const syncMovieData = () => {
+      const parsedMovies = readMoviesFromCache()
       setMovies(parsedMovies)
       const selectedMovie = parsedMovies.find((item) => item.movie_id.toString() === id)
       setMovie(selectedMovie || null)
-    } catch (error) {
-      console.error('Failed to parse movies from localStorage:', error)
-      setMovie(null)
+    }
+
+    syncMovieData()
+    window.addEventListener(MOVIES_CACHE_UPDATED_EVENT, syncMovieData)
+
+    return () => {
+      window.removeEventListener(MOVIES_CACHE_UPDATED_EVENT, syncMovieData)
     }
   }, [id])
 

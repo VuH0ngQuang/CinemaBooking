@@ -20,4 +20,6 @@ public interface BookingService {
     void updateTotalPrice(Long bookingId, Long totalPrice);
 
     void deleteBooking(Long bookingId);
+    
+    List<BookingDto> getVisibleBookingsByUserId(Long userId);
 }

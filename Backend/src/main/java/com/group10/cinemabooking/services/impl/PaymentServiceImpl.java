@@ -2,6 +2,7 @@ package com.group10.cinemabooking.services.impl;
 
 import com.group10.cinemabooking.dtos.PaymentDto;
 import com.group10.cinemabooking.dtos.PaymentRequestDto;
+import com.group10.cinemabooking.dtos.PaymentCheckoutResponseDto;
 import com.group10.cinemabooking.enums.BookingSeatStatusEnum;
 import com.group10.cinemabooking.enums.BookingStatusEnum;
 import com.group10.cinemabooking.enums.PaymentStatusEnum;
@@ -12,18 +13,20 @@ import com.group10.cinemabooking.models.BookingSeats;
 import com.group10.cinemabooking.models.Bookings;
 import com.group10.cinemabooking.models.Payments;
 import com.group10.cinemabooking.models.ShowTimeSeats;
+import com.group10.cinemabooking.models.cache.SeatHoldCacheEntry;
 import com.group10.cinemabooking.repository.BookingRepository;
 import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.PaymentRepository;
 import com.group10.cinemabooking.repository.ShowTimeSeatRepository;
 import com.group10.cinemabooking.services.PayOSService;
-import com.group10.cinemabooking.services.events.PaymentSucceededEvent;
 import com.group10.cinemabooking.services.PaymentService;
+import com.group10.cinemabooking.services.events.PaymentSucceededEvent;
 import com.group10.cinemabooking.utils.BoundedFlushHelper;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,13 +52,18 @@ public class PaymentServiceImpl implements PaymentService {
     private final ShowTimeSeatRepository showTimeSeatRepository;
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Payments> paymentCache;
+    private final InAppCache<Long, Bookings> bookingCache;
+    private final InAppCache<Long, BookingSeats> bookingSeatCache;
     private final ApplicationEventPublisher eventPublisher;
     private final EntityManager entityManager;
     private final PayOSService payOSService;
 
+    @Qualifier("seatHoldCache")
+    private final InAppCache<String, SeatHoldCacheEntry> seatHoldCache;
+
     @Override
     @Transactional
-    public String createPayment(PaymentRequestDto requestDto) {
+    public PaymentCheckoutResponseDto createPayment(PaymentRequestDto requestDto) {
         validateCreateRequest(requestDto);
 
         String lockKey = "payment:create:" + requestDto.getBookingId();
@@ -75,6 +83,9 @@ public class PaymentServiceImpl implements PaymentService {
                         "Cannot create payment for booking with status: " + booking.getBooking_status()
                 );
             }
+            if (!booking.isCurrentDraft()) {
+                throw new InvalidRequestException("Cannot create payment for inactive draft booking");
+            }
 
             boolean hasSuccessPayment = paymentRepository.existsByBookingIdAndStatus(
                     requestDto.getBookingId(),
@@ -84,10 +95,6 @@ public class PaymentServiceImpl implements PaymentService {
             if (hasSuccessPayment) {
                 throw new InvalidRequestException("This booking already has a successful payment");
             }
-//
-//            paymentRepository.findByRef(requestDto.getRef()).ifPresent(existing -> {
-//                throw new InvalidRequestException("Payment ref already exists: " + requestDto.getRef());
-//            });
 
             Payments payment = Payments.builder()
                     .booking(booking)
@@ -99,7 +106,15 @@ public class PaymentServiceImpl implements PaymentService {
             Payments savedPayment = paymentRepository.save(payment);
             paymentCache.put(savedPayment.getPayment_id(), savedPayment);
 
-            return payOSService.createPaymentRequests(savedPayment);
+            String checkoutUrl = payOSService.createPaymentRequests(savedPayment);
+
+            if (checkoutUrl == null || checkoutUrl.isBlank()) {
+                throw new RuntimeException("Failed to create payment request with PayOS");
+            }
+            return PaymentCheckoutResponseDto.builder()
+                    .paymentId(savedPayment.getPayment_id())
+                    .checkoutUrl(checkoutUrl)
+                    .build();
         } finally {
             lock.unlock();
         }
@@ -138,9 +153,6 @@ public class PaymentServiceImpl implements PaymentService {
             if (existingPayment.getStatus() == PaymentStatusEnum.SUCCESS) {
                 throw new InvalidRequestException("Cannot update a successful payment");
             }
-
-            Bookings booking = existingPayment.getBooking();
-
 
             PaymentStatusEnum oldStatus = existingPayment.getStatus();
             updateFromDto(existingPayment, requestDto);
@@ -214,19 +226,27 @@ public class PaymentServiceImpl implements PaymentService {
             }
             Payments updatedPayment = paymentRepository.save(payment);
 
-            if (booking.getBooking_status() != BookingStatusEnum.CONFIRMED) {
+            boolean bookingTransitioned = booking.getBooking_status() != BookingStatusEnum.CONFIRMED
+                    && booking.getBooking_status() != BookingStatusEnum.PAID;
+
+            if (booking.getBooking_status() != BookingStatusEnum.CONFIRMED
+                    && booking.getBooking_status() != BookingStatusEnum.PAID) {
                 booking.setBooking_status(BookingStatusEnum.PAID);
                 booking.setConfirmed_at(new Date());
                 booking.setUpdated_at(new Date());
-                bookingRepository.save(booking);
             }
+            booking.setCurrentDraft(false);
+            bookingRepository.save(booking);
 
             finalizeSeatsForSuccessfulPayment(booking);
 
             paymentCache.put(updatedPayment.getPayment_id(), updatedPayment);
-            if (statusTransitioned || booking.getBooking_status() != BookingStatusEnum.CONFIRMED) {
+            bookingCache.put(booking.getBooking_id(), booking);
+
+            if (statusTransitioned || bookingTransitioned) {
                 eventPublisher.publishEvent(new PaymentSucceededEvent(updatedPayment.getPayment_id()));
             }
+
             return toDto(updatedPayment);
         } finally {
             lock.unlock();
@@ -275,16 +295,18 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         long showtimeId = booking.getShowtime().getShowtime_id();
-        // Acquire all seat locks in sorted order to avoid deadlocks, then batch-fetch.
+
         List<Long> sortedSeatIds = bookingSeats.stream()
                 .map(bs -> bs.getSeat().getSeat_id())
                 .sorted()
                 .toList();
+
         List<ReentrantLock> seatLocks = new ArrayList<>(sortedSeatIds.size());
         for (Long seatId : sortedSeatIds) {
             seatLocks.add(lockManager.getLock("seat:showtime:lock:" + showtimeId + ":" + seatId));
         }
         seatLocks.forEach(ReentrantLock::lock);
+
         try {
             Map<Long, ShowTimeSeats> stsBySeatId = showTimeSeatRepository
                     .findAllByShowtimeIdAndSeatIdIn(showtimeId, sortedSeatIds)
@@ -296,8 +318,15 @@ public class PaymentServiceImpl implements PaymentService {
                     BATCH_FLUSH_SIZE,
                     BATCH_FLUSH_INTERVAL_MS
             );
+
             for (BookingSeats bookingSeat : bookingSeats) {
                 long seatId = bookingSeat.getSeat().getSeat_id();
+
+                // 1. Clear runtime hold cache
+                String holdKey = buildSeatHoldKey(showtimeId, seatId);
+                seatHoldCache.remove(holdKey);
+
+                // 2. Finalize DB state
                 ShowTimeSeats sts = stsBySeatId.get(seatId);
                 if (sts == null) {
                     sts = ShowTimeSeats.builder()
@@ -305,16 +334,20 @@ public class PaymentServiceImpl implements PaymentService {
                             .seat(bookingSeat.getSeat())
                             .build();
                 }
+
                 sts.setStatus(ShowtimeSeatsStatusEnum.BOOKED);
                 sts.setHold_token(null);
                 sts.setHold_expires_at(null);
                 showTimeSeatRepository.save(sts);
                 boundedFlushHelper.onWrite();
 
+                // 3. Confirm booking seat row
                 bookingSeat.setStatus(BookingSeatStatusEnum.CONFIRMED);
-                bookingSeatRepository.save(bookingSeat);
+                BookingSeats savedBookingSeat = bookingSeatRepository.save(bookingSeat);
+                bookingSeatCache.put(savedBookingSeat.getBooking_seat_id(), savedBookingSeat);
                 boundedFlushHelper.onWrite();
             }
+
             boundedFlushHelper.forceFlush();
         } finally {
             for (int i = seatLocks.size() - 1; i >= 0; i--) {
@@ -333,6 +366,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (requestDto.getStatus() == null && requestDto.getAmount() == null) {
             throw new InvalidRequestException("At least one field must be provided for update");
         }
+    }
+
+    private String buildSeatHoldKey(Long showtimeId, Long seatId) {
+        return "showtime:" + showtimeId + ":seat:" + seatId;
     }
 
     private String generateRef() {

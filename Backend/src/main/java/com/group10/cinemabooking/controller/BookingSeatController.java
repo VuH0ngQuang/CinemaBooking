@@ -43,9 +43,9 @@ public class BookingSeatController {
         return ResponseEntity.ok(updatedBookingSeat);
     }
 
-    @DeleteMapping("/{bookingSeatId}")
-    public ResponseEntity<Void> deleteBookingSeat(@PathVariable Long bookingSeatId) {
-        bookingSeatService.deleteBookingSeat(bookingSeatId);
+    @DeleteMapping
+    public ResponseEntity<Void> deleteBookingSeat(@Valid @RequestBody BookingSeatRequestDto requestDto) {
+        bookingSeatService.deleteBookingSeat(requestDto);
         return ResponseEntity.noContent().build();
     }
 }

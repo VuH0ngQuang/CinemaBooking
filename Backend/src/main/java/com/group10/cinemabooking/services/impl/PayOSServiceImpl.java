@@ -30,12 +30,18 @@ public class PayOSServiceImpl implements PayOSService {
     @Override
     public String createPaymentRequests(Payments payments) {
         try {
+            long amount = payments.getAmount();
+
+            if (amount <= 0) {
+                throw new IllegalArgumentException("Amount must be greater than zero");
+            }
+
             CreatePaymentLinkRequest paymentRequest = CreatePaymentLinkRequest.builder()
                     .orderCode(payments.getPayment_id())
                     .amount(payments.getAmount())
                     .description("Payment ref: "+payments.getRef())
-                    .cancelUrl(appConf.getAppDomain() + "/payment/cancel")
-                    .returnUrl(appConf.getAppDomain()+"/payment/success")
+                    .cancelUrl(appConf.getAppDomain()+ "payment/")
+                    .returnUrl(appConf.getAppDomain()+ "payment/")
                     .expiredAt(java.time.Instant.now()
                             .plus(java.time.Duration.ofMinutes(5))
                             .getEpochSecond())
@@ -44,7 +50,7 @@ public class PayOSServiceImpl implements PayOSService {
             return paymentLink.getCheckoutUrl();
         } catch (Exception e) {
             log.error("Error create payment link id {}, {}",payments.getPayment_id(),e.getMessage());
-            return null;
+            throw new RuntimeException("Failed to create payment: " + e.getMessage());
         }
     }
 

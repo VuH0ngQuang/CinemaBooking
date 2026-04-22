@@ -1,11 +1,21 @@
 package com.group10.cinemabooking.services.impl;
 
-import com.group10.cinemabooking.dtos.*;
+import com.group10.cinemabooking.dtos.BookingDto;
+import com.group10.cinemabooking.dtos.BookingFullRequestDto;
+import com.group10.cinemabooking.dtos.BookingRequestDto;
+import com.group10.cinemabooking.dtos.SeatSelectionDto;
 import com.group10.cinemabooking.enums.BookingSeatStatusEnum;
 import com.group10.cinemabooking.enums.BookingStatusEnum;
+import com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum;
 import com.group10.cinemabooking.exception.InvalidRequestException;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
-import com.group10.cinemabooking.models.*;
+import com.group10.cinemabooking.models.BookingSeats;
+import com.group10.cinemabooking.models.Bookings;
+import com.group10.cinemabooking.models.Seats;
+import com.group10.cinemabooking.models.ShowTimeSeats;
+import com.group10.cinemabooking.models.Showtimes;
+import com.group10.cinemabooking.models.Users;
+import com.group10.cinemabooking.models.cache.SeatHoldCacheEntry;
 import com.group10.cinemabooking.repository.BookingRepository;
 import com.group10.cinemabooking.repository.BookingSeatRepository;
 import com.group10.cinemabooking.repository.SeatRepository;
@@ -18,6 +28,7 @@ import com.group10.cinemabooking.services.PaymentService;
 import com.group10.cinemabooking.utils.InAppCache;
 import com.group10.cinemabooking.utils.LockManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +37,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -43,15 +55,35 @@ public class BookingServiceImpl implements BookingService {
     private final ShowtimeRepository showtimeRepository;
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Bookings> bookingCache;
+
+    @Qualifier("seatHoldCache")
+    private final InAppCache<String, SeatHoldCacheEntry> seatHoldCache;
+
     private final PaymentService paymentService;
     private final PayOSService payOSService;
+
+    @Override
+    public List<BookingDto> getVisibleBookingsByUserId(Long userId) {
+        if (userId == null) {
+            throw new InvalidRequestException("User id must not be null");
+        }
+
+        List<BookingStatusEnum> visibleStatuses = Arrays.asList(
+            BookingStatusEnum.PAID, 
+            BookingStatusEnum.CONFIRMED
+        );
+        return bookingRepository.findVisibleBookingsByUserId(userId, visibleStatuses)
+                .stream()
+                .map(this::toDto)
+                .toList();
+    }
 
     @Override
     @Transactional
     public BookingDto createBooking(BookingRequestDto requestDto) {
         validateRequest(requestDto);
 
-        String lockKey = "booking:create:" + requestDto.getUserId() + ":" + requestDto.getShowtimeId();
+        String lockKey = "booking:create:" + requestDto.getUserId();
         ReentrantLock lock = lockManager.getLock(lockKey);
         lock.lock();
         try {
@@ -65,10 +97,66 @@ public class BookingServiceImpl implements BookingService {
                             "Showtime not found with id: " + requestDto.getShowtimeId()
                     ));
 
+            List<Bookings> currentDrafts = bookingRepository.findCurrentDraftBookingsByUserId(requestDto.getUserId());
+            if (!currentDrafts.isEmpty()) {
+                Bookings draftBooking = currentDrafts.get(0);
+
+                // In case of multiple draft rows, keep latest active and deactivate others.
+                for (int i = 1; i < currentDrafts.size(); i++) {
+                    Bookings staleDraft = currentDrafts.get(i);
+                    staleDraft.setCurrentDraft(false);
+                    staleDraft.setUpdated_at(new Date());
+                    bookingRepository.save(staleDraft);
+                    bookingCache.put(staleDraft.getBooking_id(), staleDraft);
+                }
+
+                if (draftBooking.getShowtime() == null
+                        || draftBooking.getShowtime().getShowtime_id() != showtime.getShowtime_id()) {
+                    List<BookingSeats> bookingSeats = bookingSeatRepository.findAllByBookingId(draftBooking.getBooking_id());
+                    for (BookingSeats bookingSeat : bookingSeats) {
+                        long oldShowtimeId = draftBooking.getShowtime().getShowtime_id();
+                        long seatId = bookingSeat.getSeat().getSeat_id();
+
+                        String holdKey = buildSeatHoldKey(oldShowtimeId, seatId);
+                        seatHoldCache.remove(holdKey);
+
+                        ShowTimeSeats sts = showTimeSeatRepository.findByShowtimeIdAndSeatId(oldShowtimeId, seatId)
+                                .orElse(null);
+                        if (sts != null
+                                && sts.getStatus() == ShowtimeSeatsStatusEnum.HELD
+                                && String.valueOf(draftBooking.getBooking_id()).equals(sts.getHold_token())) {
+                            sts.setStatus(ShowtimeSeatsStatusEnum.AVAILABLE);
+                            sts.setHold_token(null);
+                            sts.setHold_expires_at(null);
+                            showTimeSeatRepository.save(sts);
+                        }
+                    }
+
+                    if (!bookingSeats.isEmpty()) {
+                        bookingSeatRepository.deleteAll(bookingSeats);
+                    }
+
+                    draftBooking.setShowtime(showtime);
+                    draftBooking.setTotal_price(0L);
+                    draftBooking.setExpired_at(buildExpiredAt());
+                    draftBooking.setUpdated_at(new Date());
+                    draftBooking.setCurrentDraft(true);
+                } else {
+                    // Same showtime: refresh draft expiry for active checkout session.
+                    draftBooking.setExpired_at(buildExpiredAt());
+                    draftBooking.setUpdated_at(new Date());
+                }
+
+                Bookings reusedBooking = bookingRepository.save(draftBooking);
+                bookingCache.put(reusedBooking.getBooking_id(), reusedBooking);
+                return toDto(reusedBooking);
+            }
+
             Bookings booking = Bookings.builder()
                     .user(user)
                     .showtime(showtime)
                     .booking_status(BookingStatusEnum.PENDING)
+                    .currentDraft(true)
                     .expired_at(buildExpiredAt())
                     .build();
 
@@ -94,11 +182,13 @@ public class BookingServiceImpl implements BookingService {
                 .map(SeatSelectionDto::getSeatId)
                 .sorted()
                 .toList();
+
         List<ReentrantLock> seatLocks = sortedSeatIds.stream()
                 .map(seatId -> lockManager.getLock("seat:showtime:lock:" + requestDto.getShowtimeId() + ":" + seatId))
                 .toList();
 
         seatLocks.forEach(ReentrantLock::lock);
+
         try {
             Users user = userRepository.findActiveById(requestDto.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException(
@@ -110,7 +200,6 @@ public class BookingServiceImpl implements BookingService {
                             "Showtime not found with id: " + requestDto.getShowtimeId()
                     ));
 
-            // Batch-fetch existing show_time_seats and seats once instead of per-iteration lookups.
             Map<Long, ShowTimeSeats> existingStsBySeatId = showTimeSeatRepository
                     .findAllByShowtimeIdAndSeatIdIn(showtime.getShowtime_id(), sortedSeatIds)
                     .stream()
@@ -121,16 +210,38 @@ public class BookingServiceImpl implements BookingService {
                     .collect(Collectors.toMap(Seats::getSeat_id, s -> s));
 
             Date now = new Date();
+
+            // 1) Check cache first
+            for (SeatSelectionDto selection : requestDto.getSeats()) {
+                String holdKey = buildSeatHoldKey(requestDto.getShowtimeId(), selection.getSeatId());
+                SeatHoldCacheEntry cachedHold = seatHoldCache.get(holdKey);
+
+                if (cachedHold != null) {
+                    if (cachedHold.isExpired()) {
+                        seatHoldCache.remove(holdKey);
+                    } else {
+                        throw new InvalidRequestException(
+                                "Seat is currently held in cache. seatId=" + selection.getSeatId()
+                        );
+                    }
+                }
+            }
+
+            // 2) DB fallback check for compatibility
             for (SeatSelectionDto selection : requestDto.getSeats()) {
                 ShowTimeSeats sts = existingStsBySeatId.get(selection.getSeatId());
                 if (sts != null) {
-                    if (sts.getStatus() == com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.BOOKED) {
-                        throw new InvalidRequestException("Seat has already been selected. seatId=" + selection.getSeatId());
+                    if (sts.getStatus() == ShowtimeSeatsStatusEnum.BOOKED) {
+                        throw new InvalidRequestException(
+                                "Seat has already been booked. seatId=" + selection.getSeatId()
+                        );
                     }
-                    if (sts.getStatus() == com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.HELD
+                    if (sts.getStatus() == ShowtimeSeatsStatusEnum.HELD
                             && sts.getHold_expires_at() != null
                             && sts.getHold_expires_at().after(now)) {
-                        throw new InvalidRequestException("Seat has already been selected. seatId=" + selection.getSeatId());
+                        throw new InvalidRequestException(
+                                "Seat is currently held in database. seatId=" + selection.getSeatId()
+                        );
                     }
                 }
             }
@@ -140,8 +251,10 @@ public class BookingServiceImpl implements BookingService {
                     .showtime(showtime)
                     .total_price(requestDto.getTotalPrice())
                     .booking_status(BookingStatusEnum.PENDING)
+                    .currentDraft(true)
                     .expired_at(buildExpiredAt())
                     .build();
+
             Bookings savedBooking = bookingRepository.save(booking);
 
             for (SeatSelectionDto selection : requestDto.getSeats()) {
@@ -151,12 +264,15 @@ public class BookingServiceImpl implements BookingService {
                             "Seat not found with id: " + selection.getSeatId()
                     );
                 }
+
                 if (seat.getScreeningRoom() == null
+                        || showtime.getScreeningRoom() == null
                         || seat.getScreeningRoom().getRoom_id() != showtime.getScreeningRoom().getRoom_id()) {
                     throw new InvalidRequestException(
                             "Seat does not belong to the showtime screening room. seatId=" + selection.getSeatId()
                     );
                 }
+
                 BookingSeats bookingSeat = BookingSeats.builder()
                         .booking(savedBooking)
                         .seat(seat)
@@ -165,12 +281,24 @@ public class BookingServiceImpl implements BookingService {
                         .build();
                 bookingSeatRepository.save(bookingSeat);
 
+                // Save to local cache first
+                String holdKey = buildSeatHoldKey(showtime.getShowtime_id(), seat.getSeat_id());
+                SeatHoldCacheEntry holdEntry = new SeatHoldCacheEntry(
+                        savedBooking.getBooking_id(),
+                        showtime.getShowtime_id(),
+                        seat.getSeat_id(),
+                        savedBooking.getExpired_at()
+                );
+                seatHoldCache.put(holdKey, holdEntry);
+
+                // Mirror to DB for backward compatibility / current flow compatibility
                 ShowTimeSeats existing = existingStsBySeatId.get(selection.getSeatId());
                 ShowTimeSeats toSave = existing != null ? existing : ShowTimeSeats.builder()
                         .showtime(showtime)
                         .seat(seat)
                         .build();
-                toSave.setStatus(com.group10.cinemabooking.enums.ShowtimeSeatsStatusEnum.HELD);
+
+                toSave.setStatus(ShowtimeSeatsStatusEnum.HELD);
                 toSave.setHold_expires_at(savedBooking.getExpired_at());
                 toSave.setHold_token(String.valueOf(savedBooking.getBooking_id()));
                 showTimeSeatRepository.save(toSave);
@@ -306,6 +434,7 @@ public class BookingServiceImpl implements BookingService {
                 .canceledAt(booking.getCanceled_at())
                 .userId(booking.getUser() != null ? booking.getUser().getUser_id() : null)
                 .showtimeId(booking.getShowtime() != null ? booking.getShowtime().getShowtime_id() : null)
+                .currentDraft(booking.isCurrentDraft())
                 .build();
     }
 
@@ -359,7 +488,12 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    private Date buildExpiredAt() {
-        return new Date(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(10));
+    private String buildSeatHoldKey(Long showtimeId, Long seatId) {
+        return "showtime:" + showtimeId + ":seat:" + seatId;
     }
+
+    private Date buildExpiredAt() {
+        return new Date(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(15));
+    }
+
 }

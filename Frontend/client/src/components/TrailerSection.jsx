@@ -1,4 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import {
+  MOVIES_CACHE_UPDATED_EVENT,
+  readMoviesFromCache,
+} from '../utils/moviesCache.js'
 import BlurCircle from './BlurCircle'
 import { PlayCircleIcon } from 'lucide-react'
 
@@ -39,18 +43,15 @@ const TrailerSection = () => {
   const [currentTrailerId, setCurrentTrailerId] = useState(null)
 
   useEffect(() => {
-    try {
-      const savedMovies = localStorage.getItem('movies')
-      if (!savedMovies) {
-        return
-      }
+    const syncMovies = () => {
+      setMovies(readMoviesFromCache())
+    }
 
-      const parsedMovies = JSON.parse(savedMovies)
-      if (Array.isArray(parsedMovies)) {
-        setMovies(parsedMovies)
-      }
-    } catch (error) {
-      console.error('Failed to parse movies from localStorage:', error)
+    syncMovies()
+    window.addEventListener(MOVIES_CACHE_UPDATED_EVENT, syncMovies)
+
+    return () => {
+      window.removeEventListener(MOVIES_CACHE_UPDATED_EVENT, syncMovies)
     }
   }, [])
 

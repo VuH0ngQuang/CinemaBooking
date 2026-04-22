@@ -1,6 +1,7 @@
 package com.group10.cinemabooking.services;
 
 import com.group10.cinemabooking.dtos.ShowtimeDto;
+import com.group10.cinemabooking.dtos.ShowtimeSeatStatusDto;
 
 import java.util.List;
 
@@ -17,4 +18,6 @@ public interface ShowtimeService {
     ShowtimeDto updateShowtime(Long showtimeId, ShowtimeDto showtimeDto);
 
     void deleteShowtime(Long showtimeId);
+
+    List<ShowtimeSeatStatusDto> getSeatStatusesByShowtimeId(Long showtimeId, Long bookingId);
 }

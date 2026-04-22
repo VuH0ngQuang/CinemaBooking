@@ -22,6 +22,7 @@ public class AppConf {
     @PostConstruct
     public void init() {
         log.info("===== Application Configuration =====");
+        log.info("App Domain: {}", appDomain);
         log.info("Database URL: {}", database.getUrl());
         log.info("Database Username: {}", database.getUsername());
         log.info("JWT Expiration (ms): {}", jwt.getExpirationMs());
