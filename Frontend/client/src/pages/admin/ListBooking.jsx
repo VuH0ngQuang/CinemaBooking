@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Title from '../../components/admin/Title'
-import { useAuth } from '../../context/AuthContext'
 import {
   getAllBookings,
   getAllMoviesForAdmin,
@@ -23,8 +22,6 @@ const formatDateTime = (value) => {
 }
 
 const ListBooking = () => {
-  const { token } = useAuth()
-
   const [bookings, setBookings] = useState([])
   const [users, setUsers] = useState([])
   const [showtimes, setShowtimes] = useState([])
@@ -39,10 +36,10 @@ const ListBooking = () => {
         setError('')
 
         const [bookingsData, usersData, showtimesData, moviesData] = await Promise.all([
-          getAllBookings(token),
-          getAllUsers(token),
-          getAllShowtimesForAdmin(token),
-          getAllMoviesForAdmin(token),
+          getAllBookings(),
+          getAllUsers(),
+          getAllShowtimesForAdmin(),
+          getAllMoviesForAdmin(),
         ])
 
         setBookings(Array.isArray(bookingsData) ? bookingsData : [])
@@ -57,7 +54,7 @@ const ListBooking = () => {
     }
 
     fetchData()
-  }, [token])
+  }, [])
 
   const userMap = useMemo(() => {
     const map = {}

@@ -9,46 +9,30 @@ import Favourite from './pages/Favourite.jsx'
 import Home from './pages/Home.jsx'
 import { Toaster } from 'react-hot-toast'
 import Footer from './components/Footer.jsx'
-import Login from './pages/Login.jsx'
+import { Navigate } from 'react-router-dom'
 import Layout from './pages/admin/Layout.jsx'
 import Dashboard from './pages/admin/Dashboard.jsx'
 import AddShow from './pages/admin/AddShow.jsx'
 import ListShow from './pages/admin/ListShow.jsx'
 import ListBooking from './pages/admin/ListBooking.jsx'
 import PaymentPage from './pages/PaymentPage.jsx'
-import {
-  BookingSeatManagement,
-  CinemaManagement,
-  ScreeningRoomManagement,
-  TicketOperations,
-  UserManagement,
-} from './pages/admin/ManagementPages.jsx'
 import ManagementPages from './pages/admin/ManagementPages.jsx'
 import QrScanner from './pages/admin/QrScanner.jsx'
 import AddMovie from './pages/admin/AddMovie.jsx'
-import { notifyMoviesCacheUpdated } from './utils/moviesCache.js'
-
 import ListMovie from './pages/admin/ListMovie.jsx'
+import { notifyMoviesCacheUpdated } from './utils/moviesCache.js'
+import { buildApiUrl } from './lib/api.js'
 
 const App = () => {
   const isAdminRoute = useLocation().pathname.startsWith('/admin')
-  const baseUrl = import.meta.env.VITE_BASE_URL
 
   useEffect(() => {
-    if (!baseUrl) {
-      console.warn('VITE_BASE_URL is not defined in .env')
-      return
-    }
-
-    const moviesEndpoint = `${baseUrl.replace(/\/$/, '')}/api/movies`
-
     const fetchMovies = async () => {
       try {
-        const response = await fetch(moviesEndpoint)
+        const response = await fetch(buildApiUrl('/api/movies'))
         if (!response.ok) {
           throw new Error(`Failed to fetch movies: ${response.status}`)
         }
-
         const movies = await response.json()
         localStorage.setItem('movies', JSON.stringify(movies))
         notifyMoviesCacheUpdated()
@@ -58,7 +42,7 @@ const App = () => {
     }
 
     fetchMovies()
-  }, [baseUrl])
+  }, [])
 
   return (
     <>
@@ -72,7 +56,8 @@ const App = () => {
         <Route path='/movies/:id/:date' element={<SeatLayout />} />
         <Route path='/my-bookings' element={<MyBookings />} />
         <Route path='/favorite' element={<Favourite />} />
-        <Route path='/login' element={<Login />} />
+        <Route path='/login' element={<Navigate to='/' replace />} />
+        <Route path='/payment/:bookingId' element={<PaymentPage />} />
 
         <Route path='/admin/*' element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -87,27 +72,6 @@ const App = () => {
           <Route path='qr-scanner' element={<QrScanner />} />
           <Route path='add-movie' element={<AddMovie />} />
           <Route path='list-movies' element={<ListMovie />} />
-        <Route path='/' element={<Home/>}/>
-        <Route path='/movies' element={<Movies/>}/>
-        <Route path='/movies/:id' element={<MovieDetails/>}/>
-        <Route path='/movies/:id/:date' element={<SeatLayout/>}/>
-        <Route path='/my-bookings' element={<MyBookings/>}/>
-        <Route path='/favorite' element={<Favourite/>}/>
-        <Route path="/login" element={<Login />} />
-        <Route path='/payment/:bookingId' element={<PaymentPage/>}/>
-        <Route path='/admin/*' element={<Layout/>}>
-          <Route index element={<Dashboard/>}/>
-          <Route path='add-shows' element={<AddShow/>}/>
-          <Route path='list-shows' element={<ListShow/>}/>
-          <Route path='list-bookings' element={<ListBooking/>}/>
-          <Route path='users' element={<UserManagement/>}/>
-          <Route path='cinemas' element={<CinemaManagement/>}/>
-          <Route path='screening-rooms' element={<ScreeningRoomManagement/>}/>
-          <Route path='booking-seats' element={<BookingSeatManagement/>}/>
-          <Route path='tickets' element={<TicketOperations/>}/>
-          <Route path='qr-scanner' element={<QrScanner/>}/>
-          <Route path='add-movie' element={<AddMovie/>}/>
-
         </Route>
       </Routes>
 

@@ -1,8 +1,6 @@
 import { useState } from "react"
 import { useAuth } from "../context/AuthContext"
 import { useNavigate } from "react-router-dom"
-import toast from "react-hot-toast"
-import { getUserByEmail, loginWithEmailPassword } from "../lib/authApi"
 
 const Login = () => {
   const [email, setEmail] = useState("")
@@ -12,7 +10,6 @@ const Login = () => {
 
   const { login } = useAuth()
   const navigate = useNavigate()
-  const baseUrl = import.meta.env.VITE_BASE_URL
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -25,45 +22,7 @@ const Login = () => {
 
     try {
       setIsSubmitting(true)
-
-    try {
-      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      })
-
-      if (!response.ok) {
-        const message = await response.text()
-        throw new Error(message || "Login failed")
-      }
-      const token = await loginWithEmailPassword({ email, password })
-      const userResponse = await getUserByEmail(email, token)
-
-      const normalizedUser = {
-        id: userResponse.user_id,
-        name: userResponse.full_name || userResponse.email,
-        email: userResponse.email,
-        role: userResponse.role,
-        status: userResponse.status,
-        full_name: userResponse.full_name,
-        user_id: userResponse.user_id,
-      }
-
-      const token = await response.text()
-      login({ email }, token ? "cookie-authenticated" : null)
-      toast.success("Login successful")
-      navigate("/")
-    } catch (error) {
-      toast.error(error.message || "Login failed")
-    }
-      login(normalizedUser, token)
+      await login(email, password)
       navigate("/")
     } catch (err) {
       setError(err.message || "Login failed.")

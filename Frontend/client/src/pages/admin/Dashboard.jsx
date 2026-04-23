@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Title from '../../components/admin/Title'
-import { useAuth } from '../../context/AuthContext'
 import {
   getAllBookings,
   getAllMoviesForAdmin,
@@ -34,8 +33,6 @@ const DashboardCard = ({ title, value, subtitle }) => {
 }
 
 const Dashboard = () => {
-  const { token } = useAuth()
-
   const [movies, setMovies] = useState([])
   const [showtimes, setShowtimes] = useState([])
   const [bookings, setBookings] = useState([])
@@ -52,11 +49,11 @@ const Dashboard = () => {
 
         const [moviesData, showtimesData, bookingsData, usersData, ticketsData] =
           await Promise.all([
-            getAllMoviesForAdmin(token),
-            getAllShowtimesForAdmin(token),
-            getAllBookings(token),
-            getAllUsers(token),
-            getAllTickets(token),
+            getAllMoviesForAdmin(),
+            getAllShowtimesForAdmin(),
+            getAllBookings(),
+            getAllUsers(),
+            getAllTickets(),
           ])
 
         setMovies(Array.isArray(moviesData) ? moviesData : [])
@@ -72,7 +69,7 @@ const Dashboard = () => {
     }
 
     fetchDashboardData()
-  }, [token])
+  }, [])
 
   const metrics = useMemo(() => {
     const normalizedBookings = bookings.map((booking) => {

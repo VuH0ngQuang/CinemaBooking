@@ -3,79 +3,81 @@ import { buildApiUrl } from "./api"
 export const loginWithEmailPassword = async ({ email, password }) => {
   const response = await fetch(buildApiUrl("/api/auth/login"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ email, password }),
   })
 
-  const responseText = await response.text()
+  const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(responseText || "Login failed")
+    throw new Error(text || "Login failed")
   }
-
-  return responseText
 }
 
-export const getUserByEmail = async (email, token) => {
+export const getCurrentUser = async () => {
+  const response = await fetch(buildApiUrl("/api/auth/me"), {
+    method: "GET",
+    credentials: "include",
+  })
+
+  if (response.status === 401) return null
+
+  const text = await response.text()
+
+  if (!response.ok) {
+    throw new Error(text || "Failed to fetch current user")
+  }
+
+  return JSON.parse(text)
+}
+
+export const getUserByEmail = async (email) => {
   const response = await fetch(
     buildApiUrl(`/api/users/email/${encodeURIComponent(email)}`),
     {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      credentials: "include",
     }
   )
 
-  const responseText = await response.text()
+  const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(responseText || "Failed to fetch user profile")
+    throw new Error(text || "Failed to fetch user profile")
   }
 
-  return JSON.parse(responseText)
+  return JSON.parse(text)
 }
-
-/* ================= NEW ================= */
 
 export const registerUser = async ({ email, password, full_name }) => {
   const response = await fetch(buildApiUrl("/api/auth/register"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email,
-      password,
-      full_name,
-    }),
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password, full_name }),
   })
 
-  const responseText = await response.text()
+  const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(responseText || "Registration failed")
+    throw new Error(text || "Registration failed")
   }
 
-  return responseText
+  return text
 }
 
-export const logoutRequest = async (token) => {
+export const logoutRequest = async () => {
   const response = await fetch(buildApiUrl("/api/auth/logout"), {
     method: "POST",
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    credentials: "include",
   })
 
-  const responseText = await response.text()
+  const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(responseText || "Logout failed")
+    throw new Error(text || "Logout failed")
   }
 
-  return responseText
+  return text
 }

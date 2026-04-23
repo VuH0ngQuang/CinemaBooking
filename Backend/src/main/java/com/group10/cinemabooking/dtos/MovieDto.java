@@ -24,4 +24,6 @@ public class MovieDto {
     private String trailerUrl;
     private MovieGenreEnum genre;
     private int duration_minutes;
+    private String img_horizontal;
+    private String img_vertical;
 }

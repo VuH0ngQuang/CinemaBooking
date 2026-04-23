@@ -33,13 +33,11 @@ export const getAllShowtimes = async () => {
   return JSON.parse(text)
 }
 
-export const createShowtime = async (payload, token) => {
+export const createShowtime = async (payload) => {
   const response = await fetch(buildApiUrl('/api/showtimes'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(payload),
   })
 
@@ -52,12 +50,27 @@ export const createShowtime = async (payload, token) => {
   return JSON.parse(text)
 }
 
-export const deleteShowtime = async (showtimeId, token) => {
+export const updateShowtime = async (showtimeId, payload) => {
+  const response = await fetch(buildApiUrl(`/api/showtimes/${showtimeId}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  })
+
+  const text = await response.text()
+
+  if (!response.ok) {
+    throw new Error(text || 'Update showtime failed')
+  }
+
+  return JSON.parse(text)
+}
+
+export const deleteShowtime = async (showtimeId) => {
   const response = await fetch(buildApiUrl(`/api/showtimes/${showtimeId}`), {
     method: 'DELETE',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    credentials: 'include',
   })
 
   const text = await response.text()

@@ -32,7 +32,7 @@ const Movies = () => {
         <BlurCircle top="150px" left="0px"/>
         <BlurCircle bottom="50px" right="50px"/>
         <h1 className='text-lg font-medium my-4'>Now Showing</h1>
-        <div className='flex flex-wrap maxsm:justify-center gap-8'>
+        <div className='flex flex-wrap max-sm:justify-center gap-8'>
             {movieList.map((movie) => (
                 <div key={movie.movie_id} className='flex flex-col justify-between p-3 bg-gray-800 rounded-2xl hover:-translate-y-1 transition duration-300 w-66'>
                     <img

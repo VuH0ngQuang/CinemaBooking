@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import Title from '../../components/admin/Title'
-import { useAuth } from '../../context/AuthContext'
 import {
   getAllBookingSeats,
   getAllCinemas,
@@ -146,7 +145,6 @@ const getRowKey = (row, index) => {
 
 const ManagementPages = () => {
   const location = useLocation()
-  const { token } = useAuth()
 
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -178,7 +176,7 @@ const ManagementPages = () => {
         setError('')
 
         const fetcher = fetcherMap[config.fetcherKey]
-        const data = await fetcher(token)
+        const data = await fetcher()
 
         const normalizedRows = Array.isArray(data) ? data.map(normalizeRow) : []
         setRows(normalizedRows)
@@ -191,7 +189,7 @@ const ManagementPages = () => {
     }
 
     fetchData()
-  }, [config, fetcherMap, token])
+  }, [config, fetcherMap])
 
   if (!config) {
     return (

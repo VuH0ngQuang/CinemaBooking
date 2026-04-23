@@ -5,6 +5,7 @@ import {usePayOS} from '@payos/payos-checkout'
 import BlurCircle from '../components/BlurCircle'
 import Loading from '../components/Loading'
 import {useAuth} from '../context/AuthContext'
+import { buildApiUrl } from '../lib/api'
 
 const BookingInfoPanel = ({booking, paymentId, onBack}) => (
     <div className='bg-primary/10 border border-primary/20 rounded-2xl p-5 lg:h-fit'>
@@ -102,8 +103,7 @@ const PaymentActionPanel = ({
 const PaymentPage = () => {
     const {bookingId} = useParams()
     const navigate = useNavigate()
-    const {token, openAuthModal} = useAuth()
-    const baseUrl = import.meta.env.VITE_BASE_URL?.replace(/\/$/, '')
+    const {user, openAuthModal} = useAuth()
 
     const [booking, setBooking] = useState(null)
     const [checkoutUrl, setCheckoutUrl] = useState('')
@@ -128,7 +128,7 @@ const PaymentPage = () => {
     })
 
     const requireAuth = () => {
-        if (token) return true
+        if (user) return true
         toast('Please login or register first')
         openAuthModal()
         return false
@@ -140,11 +140,9 @@ const PaymentPage = () => {
     }
 
     const fetchBooking = async () => {
-        const res = await fetch(`${baseUrl}/api/bookings/${bookingId}`, {
+        const res = await fetch(buildApiUrl(`/api/bookings/${bookingId}`), {
             method: 'GET',
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
+            credentials: 'include',
         })
 
         if (!res.ok) {
@@ -165,12 +163,10 @@ const PaymentPage = () => {
     const createPayment = async () => {
         clearPaymentSession()
 
-        const res = await fetch(`${baseUrl}/api/payments`, {
+        const res = await fetch(buildApiUrl('/api/payments'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
                 bookingId: Number(bookingId),
             }),
@@ -198,9 +194,7 @@ const PaymentPage = () => {
         if (rawText.startsWith('{') || rawText.startsWith('[')) {
             parsed = JSON.parse(rawText)
         } else if (rawText.startsWith('http://') || rawText.startsWith('https://')) {
-            parsed = {
-                checkoutUrl: rawText,
-            }
+            parsed = { checkoutUrl: rawText }
         } else {
             throw new Error('Payment response is not valid JSON or URL')
         }
@@ -233,20 +227,16 @@ const PaymentPage = () => {
     }
 
     const markPaymentSuccess = async (resolvedPaymentId) => {
-        const res = await fetch(`${baseUrl}/api/payments/${resolvedPaymentId}/mark-success`, {
+        const res = await fetch(buildApiUrl(`/api/payments/${resolvedPaymentId}/mark-success`), {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
+            credentials: 'include',
         })
 
         if (!res.ok) {
             let message = `Failed to mark payment success: ${res.status}`
             try {
                 const errorText = await res.text()
-                if (errorText) {
-                    message = errorText
-                }
+                if (errorText) message = errorText
             } catch {
                 // ignore
             }
@@ -303,11 +293,11 @@ const PaymentPage = () => {
             }
         }
 
-        if (bookingId && baseUrl && token) {
+        if (bookingId && user) {
             init()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [bookingId, baseUrl, token])
+    }, [bookingId, user])
 
     useEffect(() => {
         if (!payOSConfig.CHECKOUT_URL || isLoading) return

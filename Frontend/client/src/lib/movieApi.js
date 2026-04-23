@@ -1,48 +1,43 @@
 import { buildApiUrl } from './api'
 
-export const getAllMoviesForAdmin = async (token) => {
+export const createMovie = async (moviePayload) => {
   const response = await fetch(buildApiUrl('/api/movies'), {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(moviePayload),
   })
 
   const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(text || 'Failed to fetch movies')
+    throw new Error(text || 'Create movie failed')
   }
 
   return JSON.parse(text)
 }
 
-export const createMovie = async (moviePayload, token) => {
-  const response = await fetch(buildApiUrl('/api/movies'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+export const updateMovie = async (movieId, moviePayload) => {
+  const response = await fetch(buildApiUrl(`/api/movies/${movieId}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(moviePayload),
   })
 
-  const responseText = await response.text()
+  const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(responseText || 'Create movie failed')
+    throw new Error(text || 'Update movie failed')
   }
 
-  return JSON.parse(responseText)
+  return JSON.parse(text)
 }
 
-export const deleteMovie = async (movieId, token) => {
+export const deleteMovie = async (movieId) => {
   const response = await fetch(buildApiUrl(`/api/movies/${movieId}`), {
     method: 'DELETE',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    credentials: 'include',
   })
 
   const text = await response.text()

@@ -1,5 +1,6 @@
 package com.group10.cinemabooking.services.impl;
 
+import com.group10.cinemabooking.configurations.AppConf;
 import com.group10.cinemabooking.dtos.ImgUrlDto;
 import com.group10.cinemabooking.dtos.MovieDto;
 import com.group10.cinemabooking.exception.ResourceNotFoundException;
@@ -29,6 +30,7 @@ public class MovieServiceImpl implements MovieService {
     private final LockManager<String> lockManager;
     private final InAppCache<Long, Movies> movieCache;
     private final MinioService minioService;
+    private final AppConf appConf;
 
     @Override
     @Transactional
@@ -151,6 +153,11 @@ public class MovieServiceImpl implements MovieService {
         dto.setTrailerUrl(movie.getTrailerUrl());
         dto.setGenre(movie.getGenre());
         dto.setDuration_minutes(movie.getDuration_minutes());
+
+        String minioBase = appConf.getMinio().getUrl().replaceAll("/$", "")
+                + "/" + appConf.getMinio().getBucket();
+        dto.setImg_horizontal(minioBase + "/poster/horizontal/" + movie.getMovie_id() + ".jpg");
+        dto.setImg_vertical(minioBase + "/poster/vertical/" + movie.getMovie_id() + ".jpg");
 
         return dto;
     }

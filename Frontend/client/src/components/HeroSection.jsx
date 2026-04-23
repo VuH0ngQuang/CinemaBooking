@@ -50,6 +50,25 @@ const HeroSection = () => {
     return () => clearInterval(intervalId)
   }, [movies])
 
+  const startTransitionToPendingLayer = (layerToShow = pendingLayer, nextIndex = activeIndex) => {
+    if (layerToShow === null) {
+      return
+    }
+
+    setIsFading(true)
+    if (fadeTimeoutRef.current) {
+      clearTimeout(fadeTimeoutRef.current)
+    }
+
+    fadeTimeoutRef.current = setTimeout(() => {
+      setVisibleLayer(layerToShow)
+      setDisplayedIndex(nextIndex)
+      setPendingLayer(null)
+      setIsFading(false)
+      fadeTimeoutRef.current = null
+    }, FADE_DURATION_MS)
+  }
+
   useEffect(() => {
     if (activeIndex === displayedIndex) {
       return
@@ -61,6 +80,7 @@ const HeroSection = () => {
     const targetLayer = visibleLayer === 0 ? 1 : 0
     if (layerUrls[targetLayer] === nextUrl) {
       setPendingLayer(targetLayer)
+      startTransitionToPendingLayer(targetLayer, activeIndex)
     } else {
       setLayerUrls((previous) => {
         const updated = [...previous]
@@ -77,25 +97,6 @@ const HeroSection = () => {
       }
     }
   }, [activeIndex, displayedIndex, movies, visibleLayer, layerUrls])
-
-  const startTransitionToPendingLayer = () => {
-    if (pendingLayer === null) {
-      return
-    }
-
-    setIsFading(true)
-    if (fadeTimeoutRef.current) {
-      clearTimeout(fadeTimeoutRef.current)
-    }
-
-    fadeTimeoutRef.current = setTimeout(() => {
-      setVisibleLayer(pendingLayer)
-      setDisplayedIndex(activeIndex)
-      setPendingLayer(null)
-      setIsFading(false)
-      fadeTimeoutRef.current = null
-    }, FADE_DURATION_MS)
-  }
 
   const activeMovie = useMemo(() => {
     if (movies.length === 0) {

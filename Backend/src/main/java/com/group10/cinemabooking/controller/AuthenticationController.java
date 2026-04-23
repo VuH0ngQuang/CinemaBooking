@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -31,19 +32,25 @@ public class AuthenticationController {
     public final AuthenticationManager authenticationManager;
     public final InAppCache<String, String> tokenCache;
     public final AuthSessionService authSessionService;
+    private final boolean authCookieSecure;
+    private final String authCookieSameSite;
 
     @Autowired
     public AuthenticationController(UserService userService,
                                     JwtService jwtService,
                                     AuthenticationManager authenticationManager,
                                     InAppCache<String, String> tokenCache,
-                                    AuthSessionService authSessionService
+                                    AuthSessionService authSessionService,
+                                    @Value("${app.auth.cookie.secure:true}") boolean authCookieSecure,
+                                    @Value("${app.auth.cookie.same-site:Strict}") String authCookieSameSite
     ) {
         this.userService = userService;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.tokenCache = tokenCache;
         this.authSessionService = authSessionService;
+        this.authCookieSecure = authCookieSecure;
+        this.authCookieSameSite = authCookieSameSite;
     }
 
     @PostMapping("/login")
@@ -59,8 +66,8 @@ public class AuthenticationController {
             tokenCache.put(token, userDto.getEmail()); // whitelist
             ResponseCookie authCookie = ResponseCookie.from(AUTH_COOKIE_NAME, token)
                     .httpOnly(true)
-                    .secure(false)
-                    .sameSite("Lax")
+                    .secure(authCookieSecure)
+                    .sameSite(authCookieSameSite)
                     .path("/")
                     .maxAge(60 * 60)
                     .build();
@@ -90,8 +97,8 @@ public class AuthenticationController {
 
         ResponseCookie clearCookie = ResponseCookie.from(AUTH_COOKIE_NAME, "")
                 .httpOnly(true)
-                .secure(false)
-                .sameSite("Lax")
+                .secure(authCookieSecure)
+                .sameSite(authCookieSameSite)
                 .path("/")
                 .maxAge(0)
                 .build();

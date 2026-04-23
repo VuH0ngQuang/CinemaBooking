@@ -5,19 +5,19 @@ import { dateFormat } from '../lib/dateFormat'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { buildApiUrl } from '../lib/api'
 
 const MyBookings = () => {
   const currency = 'VNĐ'
-  const baseUrl = import.meta.env.VITE_BASE_URL?.replace(/\/$/, '')
 
-  const { token, openAuthModal } = useAuth()
+  const { user, openAuthModal } = useAuth()
   const navigate = useNavigate()
 
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
 
   const requireAuth = () => {
-    if (token) return true
+    if (user) return true
     toast('Please login or register first')
     openAuthModal?.()
     return false
@@ -30,11 +30,9 @@ const MyBookings = () => {
         return
       }
 
-      const response = await fetch(`${baseUrl}/api/bookings/my`, {
+      const response = await fetch(buildApiUrl('/api/bookings/my'), {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -55,7 +53,7 @@ const MyBookings = () => {
   useEffect(() => {
     getMyBookings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [user])
 
   const resolveBooking = (item) => ({
     id: item.bookingId || item.booking_id,
@@ -123,12 +121,6 @@ const MyBookings = () => {
                 </p>
 
                 <div className='flex flex-col gap-2'>
-                  <button
-                    onClick={() => navigate(`/booking/${booking.id}`)}
-                    className='bg-primary px-4 py-2 text-sm rounded-full font-medium cursor-pointer'
-                  >
-                    View Details
-                  </button>
                 </div>
               </div>
             </div>

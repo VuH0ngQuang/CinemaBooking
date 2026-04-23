@@ -4,28 +4,22 @@ import { assets } from '../assets/assets'
 import { MenuIcon, SearchIcon, XIcon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import AuthModal from './AuthModal'
-import { logoutRequest } from '../lib/authApi'
 
 const Navbar = () => {
 
   const [isOpen, setIsOpen] = useState(false)
 
-  const { user, logout, token } = useAuth()
   const { user, logout, authModalOpen, openAuthModal, closeAuthModal } = useAuth()
   const navigate = useNavigate()
   const displayName = user?.full_name || user?.name || user?.email || "User"
 
   const handleLogout = async () => {
     try {
-      if (token) {
-        await logoutRequest(token)
-      }
+      await logout()
     } catch (error) {
-      console.error("Logout request failed:", error)
-    } finally {
-      logout()
-      navigate("/")
+      console.error("Logout failed:", error)
     }
+    navigate("/")
   }
 
   return (
@@ -40,7 +34,7 @@ const Navbar = () => {
       max-md:text-lg z-50 flex flex-col md:flex-row items-center
       max-md:justify-center gap-8 min-md:px-8 py-3 max-md:h-screen
       min-md:rounded-full backdrop-blur bg-black/70 md:bg-white/10 md:border
-      border-gray-300/20 overflow-hidden transition-[width] duration-300 
+      border-gray-300/20 overflow-hidden transition-[width] duration-300
       ${isOpen ? 'max-md:w-full' : 'max-md:w-0'}`}>
 
         <XIcon

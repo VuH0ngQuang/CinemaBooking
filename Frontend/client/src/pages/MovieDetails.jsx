@@ -1,14 +1,14 @@
 import React, { useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import BlurCircle from '../components/BlurCircle'
 import { Heart, PlayCircleIcon, X } from 'lucide-react'
 import DateSelect from '../components/DateSelect'
-import { useNavigate } from 'react-router-dom'
 import Loading from '../components/Loading'
 import {
   MOVIES_CACHE_UPDATED_EVENT,
   readMoviesFromCache,
 } from '../utils/moviesCache.js'
+import { buildApiUrl } from '../lib/api'
 
 const getYoutubeIdFromUrl = (url) => {
   if (!url) return null
@@ -46,7 +46,6 @@ const MovieDetails = () => {
   const [movies, setMovies] = React.useState([])
   const [dateTime, setDateTime] = React.useState({})
   const [isTrailerOpen, setIsTrailerOpen] = React.useState(false)
-  const baseUrl = import.meta.env.VITE_BASE_URL
 
   useEffect(() => {
     const syncMovieData = () => {
@@ -65,14 +64,14 @@ const MovieDetails = () => {
   }, [id])
 
   useEffect(() => {
-    if (!id || !baseUrl) {
+    if (!id) {
       setDateTime({})
       return
     }
 
     const fetchShowtimes = async () => {
       try {
-        const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/showtimes/movie/${id}`)
+        const response = await fetch(buildApiUrl(`/api/showtimes/movie/${id}`))
         if (!response.ok) {
           throw new Error(`Failed to fetch showtimes: ${response.status}`)
         }
@@ -106,7 +105,7 @@ const MovieDetails = () => {
     }
 
     fetchShowtimes()
-  }, [id, baseUrl])
+  }, [id])
 
   const relatedMovies = movies
     .filter((item) => item.movie_id.toString() !== id)

@@ -46,11 +46,15 @@ public class UserServiceImpl implements UserService {
         if (userDto.getPassword() == null || userDto.getPassword().isBlank()) {
             throw new InvalidRequestException("User password must not be blank");
         }
+        String normalizedEmail = userDto.getEmail().trim().toLowerCase();
         Users user = new Users();
-        ReentrantLock lock = lockManager.getLock("user:create:" + userDto.getEmail().trim().toLowerCase());
+        ReentrantLock lock = lockManager.getLock("user:create:" + normalizedEmail);
         lock.lock();
         try {
-            user.setEmail(userDto.getEmail().trim().toLowerCase());
+            if (userRepository.existsByEmail(normalizedEmail)) {
+                throw new InvalidRequestException("User email already exists");
+            }
+            user.setEmail(normalizedEmail);
             user.setFull_name(userDto.getFull_name());
             user.setPassword(passwordEncoder.encode(userDto.getPassword()));
             saveUser(user);

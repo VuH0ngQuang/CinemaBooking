@@ -3,14 +3,11 @@ import Loading from '../../components/Loading'
 import Title from '../../components/admin/Title'
 import { CheckIcon, DeleteIcon, StarIcon } from 'lucide-react'
 import { kConverter } from '../../lib/kConverter'
-import { getMovies, getScreeningRooms, createShowtime } from '../../lib/showtimeApi'
-import { useAuth } from '../../context/AuthContext'
+import { getMovies, getScreeningRooms, createShowtime, getAllShowtimes } from '../../lib/showtimeApi'
 
 const AddShow = () => {
   const currency = 'VNĐ'
   const defaultBufferTime = 30
-
-  const { token } = useAuth()
 
   const [nowPlayingMovies, setNowPlayingMovies] = useState([])
   const [screeningRooms, setScreeningRooms] = useState([])
@@ -19,6 +16,7 @@ const AddShow = () => {
   const [dateTimeSelection, setDateTimeSelection] = useState({})
   const [dateTimeInput, setDateTimeInput] = useState('')
   const [showPrice, setShowPrice] = useState('')
+  const [existingShowtimes, setExistingShowtimes] = useState([])
   const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -29,13 +27,15 @@ const AddShow = () => {
       setLoading(true)
       setError('')
 
-      const [moviesData, roomsData] = await Promise.all([
+      const [moviesData, roomsData, showtimesData] = await Promise.all([
         getMovies(),
         getScreeningRooms(),
+        getAllShowtimes(),
       ])
 
       setNowPlayingMovies(Array.isArray(moviesData) ? moviesData : [])
       setScreeningRooms(Array.isArray(roomsData) ? roomsData : [])
+      setExistingShowtimes(Array.isArray(showtimesData) ? showtimesData : [])
     } catch (err) {
       setError(err.message || 'Failed to load movies and screening rooms.')
     } finally {
@@ -150,10 +150,40 @@ const AddShow = () => {
         })
       )
 
+      // Check overlap: new [start, end+buffer] must not intersect any existing showtime in the same room [start, end+buffer]
+      const roomShowtimes = existingShowtimes.filter(
+        (s) => Number(s.screening_room_id ?? s.screeningRoomId) === Number(selectedRoom)
+      )
+
+      const conflicts = []
+      for (const payload of payloads) {
+        const newStart = new Date(payload.start_time).getTime()
+        const newEnd = new Date(payload.end_time).getTime() + Number(defaultBufferTime) * 60 * 1000
+
+        for (const existing of roomShowtimes) {
+          const exStart = new Date(existing.start_time ?? existing.startTime).getTime()
+          const exEnd = new Date(existing.end_time ?? existing.endTime).getTime() +
+            Number(existing.buffer_time ?? existing.bufferTime ?? 0) * 60 * 1000
+
+          if (newStart < exEnd && exStart < newEnd) {
+            conflicts.push(payload.start_time)
+            break
+          }
+        }
+      }
+
+      if (conflicts.length > 0) {
+        setError(
+          `Schedule conflict in this room for: ${conflicts.join(', ')}. Please choose different times.`
+        )
+        return
+      }
+
       setIsSubmitting(true)
 
-      await Promise.all(payloads.map((payload) => createShowtime(payload, token)))
+      const created = await Promise.all(payloads.map((payload) => createShowtime(payload)))
 
+      setExistingShowtimes((prev) => [...prev, ...created])
       setSuccess(`Created ${payloads.length} showtime(s) successfully.`)
       setSelectedMovie(null)
       setSelectedRoom('')
@@ -199,20 +229,11 @@ const AddShow = () => {
               >
                 <div className="relative rounded-lg overflow-hidden">
                   <img
-                    src={movie.poster_path || movie.poster || movie.thumbnail || ''}
+                    src={`https://minio.vuhongquang.com/cinemabooking/poster/vertical/${movie.movie_id ?? movie.id}.jpg`}
                     alt={movie.title}
+                    referrerPolicy="no-referrer"
                     className="w-full object-cover brightness-90"
                   />
-
-                  <div className="text-sm flex items-center justify-between p-2 bg-black/70 w-full absolute bottom-0 left-0">
-                    <p className="flex items-center gap-1 text-gray-400">
-                      <StarIcon className="w-4 h-4 text-primary fill-primary" />
-                      {movie.vote_average ? Number(movie.vote_average).toFixed(1) : 'N/A'}
-                    </p>
-                    <p className="text-gray-300">
-                      {movie.vote_count ? `${kConverter(movie.vote_count)} Votes` : 'No votes'}
-                    </p>
-                  </div>
                 </div>
 
                 {Number(selectedMovie) === movieId && (

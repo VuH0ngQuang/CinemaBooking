@@ -7,18 +7,14 @@ import isoTimeFormat from '../lib/isoTimeFormat'
 import BlurCircle from '../components/BlurCircle'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
+import { buildApiUrl } from '../lib/api'
 
-const createBooking = async (userId, showtimeId, token, baseUrl) => {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/bookings`, {
+const createBooking = async (userId, showtimeId) => {
+  const response = await fetch(buildApiUrl('/api/bookings'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      userId,
-      showtimeId,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ userId, showtimeId }),
   })
 
   if (!response.ok) {
@@ -29,17 +25,12 @@ const createBooking = async (userId, showtimeId, token, baseUrl) => {
   return response.json()
 }
 
-const addSeatToBooking = async (bookingId, seatId, token, baseUrl) => {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/booking-seats`, {
+const addSeatToBooking = async (bookingId, seatId) => {
+  const response = await fetch(buildApiUrl('/api/booking-seats'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      bookingId,
-      seatId,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ bookingId, seatId }),
   })
 
   if (!response.ok) {
@@ -50,17 +41,12 @@ const addSeatToBooking = async (bookingId, seatId, token, baseUrl) => {
   return response.json()
 }
 
-const removeSeatFromBooking = async (bookingId, seatId, token, baseUrl) => {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/booking-seats`, {
+const removeSeatFromBooking = async (bookingId, seatId) => {
+  const response = await fetch(buildApiUrl('/api/booking-seats'), {
     method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      bookingId,
-      seatId,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ bookingId, seatId }),
   })
 
   if (!response.ok) {
@@ -69,17 +55,13 @@ const removeSeatFromBooking = async (bookingId, seatId, token, baseUrl) => {
   }
 }
 
-const getShowtimeSeatStatuses = async (showtimeId, bookingId, token, baseUrl) => {
+const getShowtimeSeatStatuses = async (showtimeId, bookingId) => {
   const params = new URLSearchParams()
   if (bookingId) params.set('bookingId', bookingId)
 
   const response = await fetch(
-    `${baseUrl.replace(/\/$/, '')}/api/showtimes/${showtimeId}/seats/status?${params.toString()}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
+    buildApiUrl(`/api/showtimes/${showtimeId}/seats/status?${params.toString()}`),
+    { credentials: 'include' }
   )
 
   if (!response.ok) {
@@ -104,7 +86,6 @@ const resolveSeatActive = (seat) => {
 
 const SeatLayout = () => {
   const { id, date } = useParams()
-  const baseUrl = import.meta.env.VITE_BASE_URL
 
   const [selectedSeats, setSelectedSeats] = React.useState([])
   const [selectedSeatIds, setSelectedSeatIds] = React.useState([])
@@ -120,10 +101,10 @@ const SeatLayout = () => {
   const [isSubmittingBooking, setIsSubmittingBooking] = React.useState(false)
 
   const navigate = useNavigate()
-  const { token, openAuthModal } = useAuth()
+  const { user, openAuthModal } = useAuth()
 
   const requireAuth = () => {
-    if (token) return true
+    if (user) return true
     toast('Please login or register first')
     openAuthModal()
     return false
@@ -134,14 +115,9 @@ const SeatLayout = () => {
   }, [showtimesForDate, selectedTime])
 
   const refreshSeatStatuses = async (currentBookingId = bookingId) => {
-    if (!selectedShowtime || !currentBookingId || !token || !baseUrl) return
+    if (!selectedShowtime || !currentBookingId) return
 
-    const statuses = await getShowtimeSeatStatuses(
-      selectedShowtime.showtime_id,
-      currentBookingId,
-      token,
-      baseUrl
-    )
+    const statuses = await getShowtimeSeatStatuses(selectedShowtime.showtime_id, currentBookingId)
 
     const nextStatusMap = {}
     const nextSelectedSeatIds = []
@@ -191,32 +167,26 @@ const SeatLayout = () => {
   }, [id, date])
 
   useEffect(() => {
-    if (!selectedShowtime || !token || !baseUrl) return
+    if (!selectedShowtime || !user) return
 
     let cancelled = false
 
     const prepareBookingAndSeatStatuses = async () => {
       try {
-        const user = JSON.parse(localStorage.getItem('user'))
         if (!user?.user_id) {
           toast.error('User id not found')
           return
         }
 
         setIsPreparingBooking(true)
-        const booking = await createBooking(user.user_id, selectedShowtime.showtime_id, token, baseUrl)
+        const booking = await createBooking(user.user_id, selectedShowtime.showtime_id)
         const resolvedBookingId = booking.bookingId || booking.booking_id
 
         if (!resolvedBookingId) {
           throw new Error('Booking id not found in response')
         }
 
-        const statuses = await getShowtimeSeatStatuses(
-          selectedShowtime.showtime_id,
-          resolvedBookingId,
-          token,
-          baseUrl
-        )
+        const statuses = await getShowtimeSeatStatuses(selectedShowtime.showtime_id, resolvedBookingId)
 
         if (cancelled) return
 
@@ -252,10 +222,10 @@ const SeatLayout = () => {
     return () => {
       cancelled = true
     }
-  }, [selectedShowtime, token, baseUrl])
+  }, [selectedShowtime, user])
 
   useEffect(() => {
-    if (!selectedTime || !baseUrl) return
+    if (!selectedTime) return
 
     const selectedShowtimeByTime = showtimesForDate.find((showtime) => showtime.start_time === selectedTime)
 
@@ -287,9 +257,7 @@ const SeatLayout = () => {
         }
 
         if (!room) {
-          const roomResponse = await fetch(
-            `${baseUrl.replace(/\/$/, '')}/api/screeningrooms/${roomId}`
-          )
+          const roomResponse = await fetch(buildApiUrl(`/api/screeningrooms/${roomId}`))
 
           if (!roomResponse.ok) {
             throw new Error(`Failed to fetch screening room: ${roomResponse.status}`)
@@ -301,9 +269,7 @@ const SeatLayout = () => {
 
         setScreeningRoom(room)
 
-        const seatsResponse = await fetch(
-          `${baseUrl.replace(/\/$/, '')}/api/seats/room/${roomId}`
-        )
+        const seatsResponse = await fetch(buildApiUrl(`/api/seats/room/${roomId}`))
 
         if (!seatsResponse.ok) {
           throw new Error(`Failed to fetch seats: ${seatsResponse.status}`)
@@ -336,7 +302,7 @@ const SeatLayout = () => {
     }
 
     fetchRoomAndSeats()
-  }, [selectedTime, showtimesForDate, baseUrl])
+  }, [selectedTime, showtimesForDate])
 
   useEffect(() => {
     if (!roomSeats.length || !selectedSeatIds.length) {
@@ -411,9 +377,9 @@ const SeatLayout = () => {
 
     try {
       if (alreadySelected) {
-        await removeSeatFromBooking(bookingId, seat.seat_id, token, baseUrl)
+        await removeSeatFromBooking(bookingId, seat.seat_id)
       } else {
-        await addSeatToBooking(bookingId, seat.seat_id, token, baseUrl)
+        await addSeatToBooking(bookingId, seat.seat_id)
       }
 
       await refreshSeatStatuses(bookingId)
@@ -431,10 +397,6 @@ const SeatLayout = () => {
   const handleBooking = async () => {
     try {
       if (!requireAuth()) return
-
-      if (!baseUrl) {
-        return toast.error('Base URL is missing')
-      }
 
       if (!selectedShowtime) {
         return toast('Please select time first')

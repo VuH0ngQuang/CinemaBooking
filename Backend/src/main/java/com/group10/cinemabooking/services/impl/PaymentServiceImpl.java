@@ -229,8 +229,7 @@ public class PaymentServiceImpl implements PaymentService {
             boolean bookingTransitioned = booking.getBooking_status() != BookingStatusEnum.CONFIRMED
                     && booking.getBooking_status() != BookingStatusEnum.PAID;
 
-            if (booking.getBooking_status() != BookingStatusEnum.CONFIRMED
-                    && booking.getBooking_status() != BookingStatusEnum.PAID) {
+            if (bookingTransitioned) {
                 booking.setBooking_status(BookingStatusEnum.PAID);
                 booking.setConfirmed_at(new Date());
                 booking.setUpdated_at(new Date());

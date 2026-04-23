@@ -1,5 +1,11 @@
 server:
   port: 1325
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+      internal-proxies: 10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1
 
 spring:
   application:
@@ -18,7 +24,11 @@ spring:
         jdbc.batch_versioned_data: true
 
 app:
-    appDomain: ${APP_DOMAIN:localhost}
+    appDomain: ${APP_DOMAIN:http://cinema.vuhongquang.com/}
+    auth:
+      cookie:
+        secure: ${AUTH_COOKIE_SECURE:true}
+        same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
     database:
       url: ${DB_HOST:localhost}?rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true
       username: ${DB_USERNAME}
@@ -48,7 +58,7 @@ app:
       startTls: true
 
     cors:
-      allow-all: ${CORS_ALLOW_ALL:true}
-      allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://103.162.20.119:5173}
+      allow-all: ${CORS_ALLOW_ALL:false}
+      allow-credentials: ${CORS_ALLOW_CREDENTIALS:false}
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://cinema.vuhongquang.com}
   
