@@ -1,10 +1,66 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import jsQR from 'jsqr'
 import toast from 'react-hot-toast'
 import BlurCircle from '../../components/BlurCircle'
 import { useAuth } from '../../context/AuthContext'
 import Title from '../../components/admin/Title'
 import { buildApiUrl } from '../../lib/api'
+
+const extractBookingCode = (rawValue) => {
+  if (!rawValue) return ''
+  if (typeof rawValue === 'string' && !rawValue.trim().startsWith('{') && !rawValue.trim().startsWith('[')) {
+    return rawValue.trim()
+  }
+  try {
+    const parsed = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue
+    return (
+      parsed?.bookingCode ||
+      parsed?.booking_code ||
+      parsed?.code ||
+      parsed?.bookingId ||
+      parsed?.booking_id ||
+      ''
+    )
+  } catch {
+    return typeof rawValue === 'string' ? rawValue.trim() : ''
+  }
+}
+
+const validateBookingCode = async (code) => {
+  const res = await fetch(buildApiUrl('/api/tickets/validate-booking'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ bookingCode: code }),
+  })
+  const rawText = await res.text()
+  let data = null
+  try {
+    data = rawText ? JSON.parse(rawText) : null
+  } catch {
+    data = { message: rawText }
+  }
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || `Validate booking failed: ${res.status}`)
+  }
+  return data
+}
+
+const STATUS_STYLES = {
+  VALID:    'bg-green-500/20 text-green-400 border-green-500/30',
+  USED:     'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  EXPIRED:  'bg-red-500/20 text-red-400 border-red-500/30',
+  CANCELLED:'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+}
+
+const TicketStatusBadge = ({ status }) => {
+  const style = STATUS_STYLES[status] ?? 'bg-white/10 text-gray-400 border-white/20'
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${style}`}>
+      {status ?? 'UNKNOWN'}
+    </span>
+  )
+}
 
 const QrScanner = () => {
   const { user, openAuthModal } = useAuth()
@@ -13,7 +69,6 @@ const QrScanner = () => {
   const [bookingCode, setBookingCode] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [result, setResult] = useState(null)
-  const [lastScannedValue, setLastScannedValue] = useState('')
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [cameraError, setCameraError] = useState('')
   const [cameraDevices, setCameraDevices] = useState([])
@@ -23,201 +78,107 @@ const QrScanner = () => {
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const frameRef = useRef(null)
+  // Refs to avoid stale closures in the RAF loop
+  const lastScannedRef = useRef('')
+  const isCameraActiveRef = useRef(false)
+  const isSubmittingRef = useRef(false)
 
-  const requireAuth = () => {
-    if (user) return true
-    toast('Please login first')
-    openAuthModal()
-    return false
-  }
+  useEffect(() => { isCameraActiveRef.current = isCameraActive }, [isCameraActive])
+  useEffect(() => { isSubmittingRef.current = isSubmitting }, [isSubmitting])
 
-  const extractBookingCode = (rawValue) => {
-    if (!rawValue) return ''
+  // Load camera devices once on mount
+  useEffect(() => {
+    navigator.mediaDevices
+      .enumerateDevices()
+      .then((devices) => {
+        const videoInputs = devices.filter((d) => d.kind === 'videoinput')
+        setCameraDevices(videoInputs)
+        if (videoInputs.length > 0) setSelectedDeviceId(videoInputs[0].deviceId)
+      })
+      .catch(() => setCameraDevices([]))
+  }, [])
 
-    if (typeof rawValue === 'string' && !rawValue.trim().startsWith('{') && !rawValue.trim().startsWith('[')) {
-      return rawValue.trim()
+  const stopCamera = useCallback(() => {
+    if (frameRef.current) {
+      cancelAnimationFrame(frameRef.current)
+      frameRef.current = null
     }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    isCameraActiveRef.current = false
+    setIsCameraActive(false)
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => () => stopCamera(), [stopCamera])
+
+  const handleValidate = useCallback(async (inputCode) => {
+    if (!user) {
+      toast('Please login first')
+      openAuthModal()
+      return
+    }
+    const resolvedCode = inputCode?.trim()
+    if (!resolvedCode) {
+      toast.error('No booking code found')
+      return
+    }
+    if (isSubmittingRef.current) return
+
+    setIsSubmitting(true)
+    isSubmittingRef.current = true
+    setResult(null)
 
     try {
-      const parsed = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue
-      return (
-        parsed?.bookingCode ||
-        parsed?.booking_code ||
-        parsed?.code ||
-        parsed?.bookingId ||
-        parsed?.booking_id ||
-        ''
-      )
-    } catch {
-      return typeof rawValue === 'string' ? rawValue.trim() : ''
-    }
-  }
-
-  const validateBookingCode = async (resolvedBookingCode) => {
-    const res = await fetch(buildApiUrl('/api/tickets/validate-booking'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ bookingCode: resolvedBookingCode }),
-    })
-
-    const rawText = await res.text()
-    let data = null
-    try {
-      data = rawText ? JSON.parse(rawText) : null
-    } catch {
-      data = { message: rawText }
-    }
-
-    if (!res.ok) {
-      throw new Error(data?.message || data?.error || `Validate booking failed: ${res.status}`)
-    }
-
-    return data
-  }
-
-  const handleValidate = async (inputCode) => {
-    try {
-      if (!requireAuth()) return
-
-      const resolvedCode = inputCode?.trim()
-      if (!resolvedCode) {
-        toast.error('No booking code found')
-        return
-      }
-
-      if (isSubmitting) return
-
-      setIsSubmitting(true)
-      setResult(null)
-
       const data = await validateBookingCode(resolvedCode)
       setResult({ success: true, data })
       toast.success(data?.message || 'Booking validated successfully')
     } catch (error) {
-      console.error(error)
       setResult({ success: false, data: { message: error.message || 'Booking validation failed' } })
       toast.error(error.message || 'Booking validation failed')
     } finally {
       setIsSubmitting(false)
+      isSubmittingRef.current = false
     }
-  }
+  }, [user, openAuthModal])
 
-  const handleScanResult = async (value) => {
-    if (!value || value === lastScannedValue) return
-
-    setLastScannedValue(value)
-    setScannedText(value)
-
-    const resolvedCode = extractBookingCode(value)
-    setBookingCode(String(resolvedCode || ''))
-
-    if (!resolvedCode) {
-      toast.error('Cannot extract booking code from QR')
-      return
-    }
-
-    await handleValidate(String(resolvedCode))
-  }
-
-  const scanFrame = () => {
+  const scanFrame = useCallback(() => {
     const video = videoRef.current
     const canvas = canvasRef.current
-
     if (!video || !canvas) return
 
     if (video.readyState >= 2) {
-      const width = video.videoWidth
-      const height = video.videoHeight
-
+      const { videoWidth: width, videoHeight: height } = video
       if (width > 0 && height > 0) {
         canvas.width = width
         canvas.height = height
-        const context = canvas.getContext('2d', { willReadFrequently: true })
-
-        if (context) {
-          context.drawImage(video, 0, 0, width, height)
-          const imageData = context.getImageData(0, 0, width, height)
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, width, height)
+          const imageData = ctx.getImageData(0, 0, width, height)
           const code = jsQR(imageData.data, imageData.width, imageData.height)
 
-          if (code?.data) {
-            void handleScanResult(code.data)
+          if (code?.data && code.data !== lastScannedRef.current) {
+            lastScannedRef.current = code.data
+            setScannedText(code.data)
+            const resolved = extractBookingCode(code.data)
+            setBookingCode(String(resolved || ''))
+            if (resolved) {
+              void handleValidate(String(resolved))
+            } else {
+              toast.error('Cannot extract booking code from QR')
+            }
           }
         }
       }
     }
 
-    if (isCameraActive) {
+    if (isCameraActiveRef.current) {
       frameRef.current = requestAnimationFrame(scanFrame)
     }
-  }
-
-  const stopCamera = () => {
-    if (frameRef.current) {
-      cancelAnimationFrame(frameRef.current)
-      frameRef.current = null
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-
-    setIsCameraActive(false)
-  }
-
-  const startCamera = async () => {
-    setCameraError('')
-
-    const videoConstraintsList = selectedDeviceId
-      ? [{ deviceId: { exact: selectedDeviceId } }, { deviceId: { ideal: selectedDeviceId } }, true]
-      : [{ facingMode: { ideal: 'environment' } }, { facingMode: 'user' }, true]
-
-    let stream = null
-    for (const videoConstraint of videoConstraintsList) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint, audio: false })
-        break
-      } catch {
-        // try next constraint
-      }
-    }
-
-    if (!stream) {
-      setCameraError('Cannot open any camera stream')
-      return
-    }
-
-    try {
-      streamRef.current = stream
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
-
-      setIsCameraActive(true)
-    } catch {
-      setCameraError('Cannot access camera. Please check browser permission and try again.')
-    }
-  }
-
-  const loadCameraDevices = async () => {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      const videoInputs = devices.filter((device) => device.kind === 'videoinput')
-      setCameraDevices(videoInputs)
-      if (!selectedDeviceId && videoInputs.length > 0) {
-        setSelectedDeviceId(videoInputs[0].deviceId)
-      }
-    } catch {
-      setCameraDevices([])
-    }
-  }
-
-  useEffect(() => {
-    loadCameraDevices()
-  }, [])
+  }, [handleValidate])
 
   useEffect(() => {
     if (isCameraActive) {
@@ -226,17 +187,43 @@ const QrScanner = () => {
     return () => {
       if (frameRef.current) {
         cancelAnimationFrame(frameRef.current)
+        frameRef.current = null
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCameraActive])
+  }, [isCameraActive, scanFrame])
 
-  useEffect(() => {
-    return () => {
-      stopCamera()
+  const startCamera = useCallback(async () => {
+    setCameraError('')
+    const constraintsList = selectedDeviceId
+      ? [{ deviceId: { exact: selectedDeviceId } }, { deviceId: { ideal: selectedDeviceId } }, true]
+      : [{ facingMode: { ideal: 'environment' } }, { facingMode: 'user' }, true]
+
+    let stream = null
+    for (const videoConstraint of constraintsList) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint, audio: false })
+        break
+      } catch { /* try next constraint */ }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+
+    if (!stream) {
+      setCameraError('Cannot open any camera stream')
+      return
+    }
+
+    streamRef.current = stream
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream
+      try {
+        await videoRef.current.play()
+      } catch {
+        setCameraError('Cannot access camera. Please check browser permission and try again.')
+        return
+      }
+    }
+    isCameraActiveRef.current = true
+    setIsCameraActive(true)
+  }, [selectedDeviceId])
 
   return (
     <div className='relative px-6 md:px-10 lg:px-16 py-20 min-h-screen'>
@@ -299,67 +286,85 @@ const QrScanner = () => {
             </p>
           </div>
 
-          <div className='bg-primary/10 border border-primary/20 rounded-2xl p-6'>
-            <h2 className='text-lg font-semibold mb-4'>Validation Result</h2>
+          <div className='bg-primary/10 border border-primary/20 rounded-2xl p-6 flex flex-col gap-4'>
+            <h2 className='text-lg font-semibold'>Validation Result</h2>
 
-            <div className='space-y-4 text-sm'>
-              <div>
-                <p className='text-gray-400 mb-1'>Scanned Raw Text</p>
-                <div className='rounded-lg border border-primary/20 p-3 break-all min-h-[56px]'>
-                  {scannedText || 'No QR scanned yet'}
-                </div>
+            <div>
+              <p className='text-xs text-gray-400 mb-1'>Scanned Raw Text</p>
+              <div className='rounded-lg border border-primary/20 p-3 break-all min-h-[44px] text-sm'>
+                {scannedText || <span className='text-gray-500'>No QR scanned yet</span>}
               </div>
-
-              <div>
-                <p className='text-gray-400 mb-1'>Resolved Booking Code</p>
-                <input
-                  value={bookingCode}
-                  onChange={(e) => setBookingCode(e.target.value)}
-                  placeholder='Booking code'
-                  className='w-full rounded-lg border border-primary/20 bg-transparent px-3 py-2 outline-none'
-                />
-              </div>
-
-              <button
-                onClick={() => handleValidate(bookingCode)}
-                disabled={isSubmitting}
-                className='w-full py-3 rounded-full bg-primary hover:bg-primary-dull transition font-medium cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
-              >
-                {isSubmitting ? 'Validating...' : 'Validate Booking'}
-              </button>
-
-              {result && (
-                <div
-                  className={`rounded-xl p-4 border ${
-                    result.success
-                      ? 'border-green-500/40 bg-green-500/10'
-                      : 'border-red-500/40 bg-red-500/10'
-                  }`}
-                >
-                  <p className='font-semibold mb-2'>
-                    {result.success ? 'Validation Success' : 'Validation Failed'}
-                  </p>
-
-                  <p className='text-sm break-words'>
-                    {result?.data?.message || 'No message'}
-                  </p>
-
-                  {result?.data?.bookingId && (
-                    <p className='text-sm mt-2'>
-                      <span className='text-gray-400'>Booking ID: </span>
-                      {result.data.bookingId}
-                    </p>
-                  )}
-
-                  {result?.data?.ticketId && (
-                    <p className='text-sm mt-2'>
-                      <span className='text-gray-400'>Ticket ID: </span>
-                      {result.data.ticketId}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
+
+            <div>
+              <p className='text-xs text-gray-400 mb-1'>Booking Code</p>
+              <input
+                value={bookingCode}
+                onChange={(e) => setBookingCode(e.target.value)}
+                placeholder='Booking code'
+                className='w-full rounded-lg border border-primary/20 bg-transparent px-3 py-2 outline-none text-sm'
+              />
+            </div>
+
+            <button
+              onClick={() => handleValidate(bookingCode)}
+              disabled={isSubmitting}
+              className='w-full py-2.5 rounded-full bg-primary hover:bg-primary-dull transition font-medium text-sm cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+            >
+              {isSubmitting ? 'Validating...' : 'Validate Booking'}
+            </button>
+
+            {result && (
+              <div className={`rounded-xl border text-sm ${
+                result.success ? 'border-green-500/40 bg-green-500/10' : 'border-red-500/40 bg-red-500/10'
+              }`}>
+                <div className='px-4 py-3 border-b border-white/10 flex items-center gap-2'>
+                  <span className={`inline-block w-2 h-2 rounded-full ${result.success ? 'bg-green-400' : 'bg-red-400'}`} />
+                  <span className='font-semibold'>
+                    {result.success ? 'Booking Valid' : 'Validation Failed'}
+                  </span>
+                </div>
+
+                <div className='px-4 py-3 space-y-1 text-gray-300'>
+                  {result.data?.message && <p>{result.data.message}</p>}
+                  {result.data?.bookingCode && (
+                    <p><span className='text-gray-500'>Booking Code: </span>{result.data.bookingCode}</p>
+                  )}
+                </div>
+
+                {result.success && result.data?.tickets?.length > 0 && (
+                  <div className='px-4 pb-4 space-y-3'>
+                    <p className='text-xs text-gray-400 font-medium uppercase tracking-wide'>
+                      Tickets ({result.data.tickets.length})
+                    </p>
+                    {result.data.tickets.map((ticket) => (
+                      <div
+                        key={ticket.ticketId}
+                        className='rounded-lg border border-white/10 bg-black/30 p-3 space-y-1.5'
+                      >
+                        <div className='flex items-center justify-between'>
+                          <span className='font-medium'>Seat {ticket.seatNumber ?? ticket.seatId}</span>
+                          <TicketStatusBadge status={ticket.status} />
+                        </div>
+                        <div className='text-xs text-gray-400 space-y-0.5'>
+                          <p><span className='text-gray-500'>Ticket ID: </span>{ticket.ticketId}</p>
+                          <p><span className='text-gray-500'>Code: </span>{ticket.ticketCode}</p>
+                          {ticket.issuedAt && (
+                            <p><span className='text-gray-500'>Issued: </span>{new Date(ticket.issuedAt).toLocaleString()}</p>
+                          )}
+                          {ticket.usedAt && (
+                            <p><span className='text-gray-500'>Used: </span>{new Date(ticket.usedAt).toLocaleString()}</p>
+                          )}
+                          {ticket.validUntil && (
+                            <p><span className='text-gray-500'>Valid until: </span>{new Date(ticket.validUntil).toLocaleString()}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
