@@ -8,8 +8,13 @@ const DateSelect = ({dateTime, id}) => {
 
   const navigate = useNavigate()  
   const [selected, setSelected] = React.useState(null);
+  const availableDates = Object.keys(dateTime || {})
+  const hasDates = availableDates.length > 0
 
   const onBookHandler = () => {
+    if (!hasDates) {
+        return toast('No showtime available for this movie yet')
+    }
     if (!selected) {
         return toast('Please select a date')
     }
@@ -28,7 +33,7 @@ const DateSelect = ({dateTime, id}) => {
                     <ChevronLeftIcon width={28} className="cursor-pointer"/>
 
                     <div className='flex gap-4 max-w-lg overflow-x-auto'>
-                        {Object.keys(dateTime).map((date) => (
+                        {availableDates.map((date) => (
                         <button
                             onClick={() => setSelected(date)}
                             key={date}
@@ -53,10 +58,20 @@ const DateSelect = ({dateTime, id}) => {
 
                     <ChevronRightIcon width={28} className="cursor-pointer"/>
                 </div>
+                {!hasDates && (
+                    <p className='text-sm text-gray-300 mt-3'>
+                        No showtimes available yet. Please add showtime data in backend/admin.
+                    </p>
+                )}
 
             </div>
-            <button onClick={onBookHandler} className='bg-primary text-white px-8 py-2 mt-6 rounded
-            hover:bg-primary/90 transition-all cursor-pointer'>Book Now</button>
+            <button
+              onClick={onBookHandler}
+              disabled={!hasDates}
+              className='bg-primary text-white px-8 py-2 mt-6 rounded hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed'
+            >
+              Book Now
+            </button>
         </div>
     </div>
   )

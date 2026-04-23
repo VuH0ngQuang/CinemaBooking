@@ -30,7 +30,8 @@ app:
         secure: ${AUTH_COOKIE_SECURE:true}
         same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
     database:
-      url: ${DB_HOST:localhost}?rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true
+      # Prefer DB_URL (full jdbc url). Keep DB_HOST for backward compatibility.
+      url: ${DB_URL:${DB_HOST:jdbc:mysql://localhost:3306/cinema_booking}}?rewriteBatchedStatements=true&cachePrepStmts=true&useServerPrepStmts=true
       username: ${DB_USERNAME}
       password: ${DB_PASSWORD}
 
@@ -59,6 +60,6 @@ app:
 
     cors:
       allow-all: ${CORS_ALLOW_ALL:false}
-      allow-credentials: ${CORS_ALLOW_CREDENTIALS:false}
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://cinema.vuhongquang.com}
+      allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://cinema.vuhongquang.com}
   
