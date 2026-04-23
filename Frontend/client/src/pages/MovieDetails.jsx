@@ -100,6 +100,18 @@ const MovieDetails = () => {
         setDateTime(groupedByDate)
       } catch (error) {
         console.error('Failed to fetch showtimes:', error)
+        // Fallback to cached showtimes so "Choose Date" still works when API is temporarily unreachable.
+        try {
+          const cachedByDate = localStorage.getItem(`showtimes_by_date_${id}`)
+          const parsedCachedByDate = cachedByDate ? JSON.parse(cachedByDate) : null
+          if (parsedCachedByDate && typeof parsedCachedByDate === 'object') {
+            setDateTime(parsedCachedByDate)
+            return
+          }
+        } catch (cacheError) {
+          console.error('Failed to parse cached showtimes by date:', cacheError)
+        }
+
         setDateTime({})
       }
     }
